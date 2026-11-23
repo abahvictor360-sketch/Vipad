@@ -138,18 +138,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: Resolve version
         id: v
-        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then tag="$GITHUB_REF_NAME"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Never replace files of a published release: users would get 404s mid-upload.
+          # Bump "version" in package.json to publish new installers.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release $tag already published - skipping. Bump package.json version to release new installers."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/download-artifact@v4
+        if: steps.v.outputs.exists == 'false'
         with:
           path: out
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
+        if: steps.v.outputs.exists == 'false'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || steps.v.outputs.tag }}
+          tag_name: ${{ steps.v.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: Vipad ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || steps.v.outputs.tag }}
+          name: Vipad ${{ steps.v.outputs.tag }}
           make_latest: 'true'
-          overwrite_files: true
           generate_release_notes: true
           files: |
             out/Vipad-Setup-x64.exe

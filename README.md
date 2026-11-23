@@ -44,7 +44,7 @@ npm run test:e2e      # Playwright end-to-end (desktop, tablet, phone) against t
 | Android | `npm run cap:sync && cd android && ./gradlew assembleRelease` | `android/app/build/outputs/apk/release/app-release.apk` |
 | iOS | `npm run cap:sync && npx cap open ios` (Xcode) | App Store / TestFlight build |
 
-CI (`.github/workflows/build.yml`) builds every platform on each push, and every push to the default branch publishes/updates the GitHub Release for the version in `package.json` (bump the version for a new release). The download page always points to the latest release. iOS ships as an unsigned `.ipa` for AltStore/Sideloadly plus the PWA.
+CI (`.github/workflows/build.yml`) builds every platform on each push, and every push to the default branch publishes a GitHub Release for the version in `package.json` if it does not exist yet — published releases are never modified, so bump the version to ship new installers. The download page always points to the latest release. iOS ships as an unsigned `.ipa` for AltStore/Sideloadly plus the PWA.
 
 ### Signing (optional, recommended for public release)
 
