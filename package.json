@@ -1,0 +1,155 @@
+{
+  "name": "vipad",
+  "productName": "Vipad",
+  "version": "1.0.0",
+  "description": "Vipad \u2014 professional audio recorder and editor for desktop, mobile and web.",
+  "author": "Vipad",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "homepage": "https://github.com/abahvictor360-sketch/Vipad",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test --trace off",
+    "electron:dev": "vite build && electron .",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "cap:sync": "npm run build && cap sync",
+    "android:apk": "npm run cap:sync && cd android && ./gradlew assembleRelease",
+    "test:desktop": "xvfb-run -a node tests/e2e/desktop.electron.cjs release/linux-unpacked/vipad",
+    "test:all": "npm run typecheck && npm test && npm run build && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "@capacitor/cli": "^6.2.3",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "jsdom": "^31.0.1",
+    "lucide-react": "^1.78.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "5.6",
+    "vite": "^6.4.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^2.1.9",
+    "zustand": "^5.1.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.2.3",
+    "@capacitor/filesystem": "^6.0.4",
+    "@capacitor/share": "^6.0.4",
+    "@capacitor/android": "^6.2.3",
+    "@capacitor/ios": "^6.2.3"
+  },
+  "build": {
+    "appId": "com.vipad.app",
+    "productName": "Vipad",
+    "copyright": "Copyright \u00a9 Vipad",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "fileAssociations": [
+      {
+        "ext": "wav",
+        "name": "WAV Audio",
+        "role": "Editor"
+      },
+      {
+        "ext": "mp3",
+        "name": "MP3 Audio",
+        "role": "Editor"
+      },
+      {
+        "ext": "ogg",
+        "name": "OGG Audio",
+        "role": "Editor"
+      },
+      {
+        "ext": "flac",
+        "name": "FLAC Audio",
+        "role": "Editor"
+      },
+      {
+        "ext": "m4a",
+        "name": "M4A Audio",
+        "role": "Editor"
+      },
+      {
+        "ext": "aac",
+        "name": "AAC Audio",
+        "role": "Editor"
+      },
+      {
+        "ext": "opus",
+        "name": "OPUS Audio",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Vipad-Setup-x64.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "artifactName": "Vipad-mac-universal.${ext}",
+      "category": "public.app-category.music",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Vipad needs microphone access to record audio."
+      }
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Audio",
+      "artifactName": "Vipad-linux-${arch}.${ext}",
+      "maintainer": "Vipad <noreply@vipad.app>",
+      "synopsis": "Audio recorder and editor"
+    },
+    "publish": null
+  }
+}

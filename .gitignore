@@ -1,0 +1,26 @@
+node_modules/
+dist/
+release/
+test-results/
+playwright-report/
+coverage/
+*.log
+.DS_Store
+.env*
+.vercel
+# native build outputs
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor-cordova-android-plugins/
+ios/App/Pods/
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/DerivedData/
+*.keystore
+*.jks

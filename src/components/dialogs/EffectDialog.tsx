@@ -1,0 +1,85 @@
+import { useState } from 'react';
+import { Play, Square, RotateCcw, Wand2 } from 'lucide-react';
+import { Modal } from './Modal';
+import { ParamControls } from './ParamControls';
+import { EFFECTS_BY_ID, defaultParams } from '../../audio/effects';
+import { useEditor } from '../../store/editor';
+import { slice, length } from '../../audio/buffer';
+import { runEffect } from '../../audio/runEffect';
+import { player } from '../../audio/player';
+import { formatTime } from '../../app/format';
+
+export function EffectDialog({ effectId }: { effectId: string }) {
+  const e = EFFECTS_BY_ID[effectId];
+  const last = useEditor((s) => s.lastParams[effectId]);
+  const doc = useEditor((s) => s.active());
+  const [params, setParams] = useState(() => last ?? defaultParams(e));
+  const [previewing, setPreviewing] = useState(false);
+  const close = () => {
+    player.stop();
+    useEditor.getState().setDialog(null);
+  };
+  if (!doc) return null;
+  const sr = doc.audio.sampleRate;
+  const range = doc.selection ?? { start: 0, end: length(doc.audio) };
+  const scope = doc.selection ? `Selection · ${formatTime((range.end - range.start) / sr)}` : `Whole file · ${formatTime(length(doc.audio) / sr)}`;
+
+  const preview = async () => {
+    if (previewing) {
+      player.stop();
+      setPreviewing(false);
+      return;
+    }
+    setPreviewing(true);
+    const clip = slice(doc.audio, { start: range.start, end: Math.min(range.end, range.start + sr * 8) });
+    try {
+      const out = await runEffect(effectId, clip, params);
+      player.preview(out);
+      const unsub = player.subscribe(() => {
+        if (!player.playing) {
+          setPreviewing(false);
+          unsub();
+        }
+      });
+    } catch {
+      setPreviewing(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={e.name}
+      subtitle={`${e.description}  ·  ${scope}`}
+      onClose={close}
+      wide={effectId === 'eq'}
+      icon={<Wand2 size={18} />}
+      footer={
+        <>
+          <button className="btn btn-ghost" onClick={() => setParams(defaultParams(e))} disabled={!e.params.length}>
+            <RotateCcw size={16} /> Reset
+          </button>
+          <span className="spacer" />
+          <button className="btn btn-secondary" onClick={preview} data-testid="effect-preview">
+            {previewing ? <Square size={16} /> : <Play size={16} />} {previewing ? 'Stop' : 'Preview'}
+          </button>
+          <button
+            className="btn btn-primary"
+            data-testid="effect-apply"
+            onClick={() => {
+              close();
+              void useEditor.getState().applyEffect(effectId, params);
+            }}
+          >
+            Apply
+          </button>
+        </>
+      }
+    >
+      {e.params.length ? (
+        <ParamControls defs={e.params} values={params} onChange={setParams} compact={effectId === 'eq'} />
+      ) : (
+        <p className="muted">This effect has no settings. Preview it or apply it directly.</p>
+      )}
+    </Modal>
+  );
+}

@@ -1,0 +1,42 @@
+/* Vipad design tokens — lime on black */
+:root {
+  --lime: #c6ff3d;
+  --lime-strong: #b2f01a;
+  --lime-dim: #8fbf1f;
+  --lime-glow: rgba(198, 255, 61, 0.35);
+  --lime-a10: rgba(198, 255, 61, 0.1);
+  --lime-a20: rgba(198, 255, 61, 0.2);
+  --on-lime: #0a0d02;
+
+  --bg: #070707;
+  --surface: #0f0f0f;
+  --surface-2: #151515;
+  --surface-3: #1c1c1c;
+  --surface-4: #242424;
+  --border: #252525;
+  --border-strong: #333;
+  --text: #f3f4ee;
+  --text-2: #c9cbc2;
+  --muted: #8d8f86;
+  --danger: #ff5c5c;
+  --warn: #ffb020;
+  --rec: #ff3b3b;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+  --font: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter Variable', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+::selection { background: var(--lime); color: var(--on-lime); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

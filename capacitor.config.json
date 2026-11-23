@@ -1,0 +1,8 @@
+{
+  "appId": "com.vipad.app",
+  "appName": "Vipad",
+  "webDir": "dist",
+  "backgroundColor": "#070707",
+  "android": { "allowMixedContent": false, "backgroundColor": "#070707" },
+  "ios": { "contentInset": "never", "backgroundColor": "#070707" }
+}
