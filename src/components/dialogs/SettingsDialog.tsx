@@ -78,6 +78,8 @@ export function SettingsDialog() {
           <Select k="exportFormat" label="Format" options={[['mp3', 'MP3'], ['wav', 'WAV']]} />
           <Select k="mp3Bitrate" label="MP3 bitrate" options={[[96, '96 kbps'], [128, '128 kbps'], [192, '192 kbps'], [256, '256 kbps'], [320, '320 kbps']]} />
           <Select k="wavBitDepth" label="WAV bit depth" options={[[16, '16-bit'], [24, '24-bit'], [32, '32-bit float']]} />
+          <Select k="exportChannels" label="Channels" options={[['keep', 'Same as original'], ['mono', 'Mono'], ['stereo', 'Stereo']]} />
+          <Select k="exportSampleRate" label="Sample rate" options={[['keep', 'Same as original'], [22050, '22.05 kHz'], [44100, '44.1 kHz (CD)'], [48000, '48 kHz (video)'], [96000, '96 kHz (hi-res)'], [192000, '192 kHz (studio)'], [225000, '225 kHz (maximum)']]} />
         </section>
       </div>
     </Modal>

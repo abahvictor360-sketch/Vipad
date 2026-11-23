@@ -167,3 +167,51 @@ test.describe('editor', () => {
     expect((await docInfo(page))!.length).toBe(n);
   });
 });
+
+test.describe('export channels & sample rate', () => {
+  const header = (b: Buffer) => ({ channels: b.readUInt16LE(22), rate: b.readUInt32LE(24), bits: b.readUInt16LE(34) });
+
+  test.beforeEach(async ({ page }) => {
+    await openApp(page);
+    await generateTone(page, 1);
+  });
+
+  test('saves mono WAV at 225 kHz (maximum)', async ({ page }) => {
+    await page.getByTestId('export').click();
+    await page.getByTestId('fmt-wav').click();
+    await page.getByTestId('ch-mono').click();
+    await page.getByTestId('export-rate').selectOption('225000');
+    await expect(page.locator('.modal-head p')).toContainText('Mono · 225 kHz');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-confirm').click()]);
+    const h = header(readFileSync((await dl.path())!));
+    expect(h).toEqual({ channels: 1, rate: 225000, bits: 16 });
+  });
+
+  test('saves stereo WAV at a custom 10 kHz rate, rejects out-of-range values', async ({ page }) => {
+    await page.getByTestId('export').click();
+    await page.getByTestId('fmt-wav').click();
+    await page.getByTestId('ch-stereo').click();
+    await page.getByTestId('export-rate').selectOption('custom');
+    const input = page.getByTestId('export-rate-custom');
+    await input.fill('5000');
+    await expect(page.getByRole('alert')).toContainText('10,000 to 225,000 Hz');
+    await input.fill('300000');
+    await expect(page.getByRole('alert')).toBeVisible();
+    await input.fill('10000');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-confirm').click()]);
+    const b = readFileSync((await dl.path())!);
+    expect(header(b)).toEqual({ channels: 2, rate: 10000, bits: 16 });
+    expect(b.length).toBe(44 + 10000 * 2 * 2);
+  });
+
+  test('explains the 48 kHz MP3 limit and switches to WAV', async ({ page }) => {
+    await page.getByTestId('export').click();
+    await page.getByTestId('fmt-mp3').click();
+    await page.getByTestId('export-rate').selectOption('192000');
+    await expect(page.getByTestId('mp3-rate-note')).toContainText('48 kHz');
+    await page.getByTestId('mp3-rate-note').getByRole('button', { name: 'WAV' }).click();
+    await expect(page.getByTestId('fmt-wav')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('mp3-rate-note')).toHaveCount(0);
+  });
+});

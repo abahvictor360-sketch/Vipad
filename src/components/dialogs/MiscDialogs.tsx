@@ -6,7 +6,7 @@ import { createSilence } from '../../audio/buffer';
 import { listLibrary, loadFromLibrary, deleteFromLibrary, LibraryItem } from '../../audio/library';
 import { formatTime, modKey } from '../../app/format';
 import { EFFECTS, EFFECTS_BY_ID, defaultParams } from '../../audio/effects';
-import { renderExport, ExportOptions } from './ExportDialog';
+import { renderExport, ExportOptions, RateField, ChannelsField } from './ExportDialog';
 import { saveFile } from '../../app/platform';
 import { useSettings } from '../../store/settings';
 import { allDocs, deleteDoc, StoredDoc, putDoc, RETENTION_MS } from '../../audio/recovery';
@@ -197,6 +197,8 @@ export function BatchDialog() {
   const [files, setFiles] = useState<File[]>([]);
   const [effect, setEffect] = useState('normalize');
   const [fmt, setFmt] = useState<ExportOptions['format']>('mp3');
+  const [channels, setChannels] = useState<ExportOptions['channels']>('keep');
+  const [rate, setRate] = useState<ExportOptions['sampleRate']>('keep');
   const [progress, setProgress] = useState<string | null>(null);
   const run = async () => {
     const st = useEditor.getState();
@@ -207,7 +209,7 @@ export function BatchDialog() {
       try {
         let a = await decodeFile(f);
         if (effect !== 'none') a = EFFECTS_BY_ID[effect].apply(a, defaultParams(EFFECTS_BY_ID[effect]));
-        const { blob, ext } = renderExport(a, { format: fmt, bitDepth: 16, bitrate: 192, sampleRate: 'keep', channels: 'keep' });
+        const { blob, ext } = renderExport(a, { format: fmt, bitDepth: 16, bitrate: 192, sampleRate: rate, channels });
         await saveFile(blob, `${f.name.replace(/\.[^.]+$/, '')}-vipad.${ext}`);
         ok++;
       } catch (e) {
@@ -254,6 +256,10 @@ export function BatchDialog() {
               <option value="wav">WAV 16-bit</option>
             </select>
           </label>
+        </div>
+        <div className="grid-2">
+          <ChannelsField value={channels} onChange={setChannels} original={2} />
+          <RateField value={rate} onChange={setRate} original={48000} format={fmt} />
         </div>
         {progress && <p className="muted" role="status">{progress}</p>}
       </div>

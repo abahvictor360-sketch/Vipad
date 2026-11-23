@@ -14,6 +14,8 @@ export interface Settings {
   exportFormat: 'mp3' | 'wav';
   mp3Bitrate: number;
   wavBitDepth: 8 | 16 | 24 | 32;
+  exportChannels: 'keep' | 'mono' | 'stereo';
+  exportSampleRate: number | 'keep';
   // editing & view
   followPlayhead: boolean;
   confirmClose: boolean;
@@ -34,6 +36,8 @@ export const DEFAULT_SETTINGS: Settings = {
   exportFormat: 'mp3',
   mp3Bitrate: 192,
   wavBitDepth: 16,
+  exportChannels: 'keep',
+  exportSampleRate: 'keep',
   followPlayhead: true,
   confirmClose: true,
   undoSteps: 100,
