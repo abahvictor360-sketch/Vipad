@@ -66,7 +66,7 @@ export function wireCommon() {
   });
 }
 
-export interface ReleaseInfo { tag: string; date: string; sizes: Record<string, number> }
+export interface ReleaseInfo { tag: string; date: string; sizes: Record<string, number>; urls: Record<string, string> }
 
 /** Latest release metadata from the public GitHub API (best effort; the page works without it). */
 export async function fetchRelease(): Promise<ReleaseInfo | null> {
@@ -74,10 +74,19 @@ export async function fetchRelease(): Promise<ReleaseInfo | null> {
     const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
     if (!r.ok) return null;
     const j = await r.json();
-    return { tag: j.tag_name, date: j.published_at, sizes: Object.fromEntries((j.assets ?? []).map((a: { name: string; size: number }) => [a.name, a.size])) };
+    const assets = (j.assets ?? []) as { name: string; size: number; browser_download_url: string }[];
+    return { tag: j.tag_name, date: j.published_at, sizes: Object.fromEntries(assets.map((a) => [a.name, a.size])), urls: Object.fromEntries(assets.map((a) => [a.name, a.browser_download_url])) };
   } catch {
     return null;
   }
 }
 
 export const mb = (n: number) => `${(n / 1048576).toFixed(n > 10 * 1048576 ? 0 : 1)} MB`;
+
+/** Point every download button at the exact file of the latest release (falls back to /latest/download/). */
+export function applyRelease(r: ReleaseInfo) {
+  document.querySelectorAll<HTMLAnchorElement>('[data-asset]').forEach((a) => {
+    const url = r.urls[a.dataset.asset!];
+    if (url) a.href = url;
+  });
+}

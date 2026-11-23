@@ -62,3 +62,29 @@ test.describe('guide page', () => {
     }
   });
 });
+
+test('download buttons resolve to the exact release files and show sizes', async ({ page }) => {
+  await page.route('https://api.github.com/repos/abahvictor360-sketch/Vipad/releases/latest', (r) =>
+    r.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        tag_name: 'v1.0.0',
+        published_at: '2026-11-23T20:14:35Z',
+        assets: [{ name: 'Vipad-android.apk', size: 5 * 1048576, browser_download_url: 'https://github.com/abahvictor360-sketch/Vipad/releases/download/v1.0.0/Vipad-android.apk' }],
+      }),
+    }),
+  );
+  await page.goto('/download.html?os=android');
+  const btn = page.locator('.os-card[data-os="android"] .dl-btn');
+  await expect(btn).toHaveAttribute('href', 'https://github.com/abahvictor360-sketch/Vipad/releases/download/v1.0.0/Vipad-android.apk');
+  await expect(page.locator('.os-card[data-os="android"] .dl-cap')).toContainText('5.0 MB');
+  await expect(page.locator('#d-date')).toContainText('2026');
+  // assets missing from the API response keep the always-valid "latest" link
+  await expect(page.locator('.os-card[data-os="windows"] .dl-btn')).toHaveAttribute('href', /releases\/latest\/download\/Vipad-Setup-x64\.exe$/);
+});
+
+test('custom 404 page offers a way to the downloads', async ({ page }) => {
+  await page.goto('/404.html');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('went silent');
+  await expect(page.getByRole('link', { name: 'Go to downloads' })).toHaveAttribute('href', '/download');
+});

@@ -73,3 +73,7 @@
   .dl-teaser .hero-ctas .btn { width: 100%; }
 }
 @media (max-width: 680px) { .d-version .sep:last-of-type { display: none; } .d-version { border-radius: 22px; } }
+.nf { min-height: calc(100dvh - 72px); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 20px; }
+.nf h1 { margin: 0; font-family: var(--font-display); font-size: clamp(40px, 6vw, 72px); letter-spacing: -.04em; color: #eef1ec; }
+.nf-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.nf-actions .dl-btn { width: auto; padding: 0 28px; height: 52px; }

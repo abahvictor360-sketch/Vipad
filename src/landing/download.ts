@@ -1,4 +1,4 @@
-import { wireCommon, currentOS, fetchRelease, mb } from './shared';
+import { wireCommon, currentOS, fetchRelease, mb, applyRelease } from './shared';
 import './download.css';
 
 wireCommon();
@@ -15,6 +15,7 @@ if (card) {
 // live release info (version, date, file sizes)
 fetchRelease().then((r) => {
   if (!r) return;
+  applyRelease(r);
   document.getElementById('d-ver')!.textContent = `Version ${r.tag.replace(/^v/, '')}`;
   document.getElementById('d-date')!.textContent = `Released ${new Date(r.date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}`;
   document.querySelectorAll<HTMLElement>('[data-size-for]').forEach((el) => {
