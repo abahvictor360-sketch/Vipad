@@ -10,9 +10,11 @@ Vipad is a fast, private audio recorder and editor that runs on **Windows, macOS
 | Area | What you get |
 | --- | --- |
 | Record | Lossless 32-bit float capture (AudioWorklet), device picker, mono/stereo, pause/resume, record into new file / insert / overdub, live level meter, auto-save to library |
+| Multitrack (toggle on/off) | Unlimited tracks, per-track volume / pan / mute / solo, drag clips in time and between tracks, split, duplicate, clip gain, record new tracks while hearing the others, mixdown to a file, `.vipad` project files |
+| Menu & settings | WavePad-style ☰ menu (File, Edit, Levels, Effects, Restore, Control, Generate, Bookmark, Region, View, Tools, Window, Help), Open Recent, Save As / Save All / Close All, persisted Settings (defaults for new files, recording, export, undo levels, follow playhead…) |
 | Edit | Sample-accurate selection, cut / copy / paste / mix-paste / delete / trim / silence / insert silence, unlimited undo/redo, markers, multiple files in tabs |
 | View | Zoom from whole-file to individual samples, pinch-zoom on touch, overview navigator, follow-playhead, stereo level meters, real-time spectrum |
-| Effects (31) | Amplify, Normalize, Fade in/out, Volume ramp, 10-band EQ, Low/High/Band-pass, Bass, Treble, Compressor, Limiter, Noise gate, Noise reduction (spectral), Hum notch, De-click, DC offset, Auto-trim silence, Speed, Tempo (WSOLA, keeps pitch), Pitch (keeps length), Reverse, Echo, Reverb, Chorus, Tremolo, Distortion, Telephone, Invert, Pan, Swap channels, Vocal remover, Stereo width |
+| Effects (34) | Grab Noise Sample + Apply Subtraction from Noise Sample, Multi-band noise gate, Click/Pop removal (auto & manual), Amplify, Normalize, Fade in/out, Volume ramp, 10-band EQ, Low/High/Band-pass, Bass, Treble, Compressor, Limiter, Noise gate, Noise reduction (spectral), Hum notch, De-click, DC offset, Auto-trim silence, Speed, Tempo (WSOLA, keeps pitch), Pitch (keeps length), Reverse, Echo, Reverb, Chorus, Tremolo, Distortion, Telephone, Invert, Pan, Swap channels, Vocal remover, Stereo width |
 | Generate | Tones (sine/square/saw/triangle), white/pink/brown noise, silence, DTMF |
 | Files | Open WAV (native 8/16/24/32-bit & float), MP3, OGG, FLAC, M4A/AAC, WebM, Opus. Export WAV 8/16/24/32f and MP3 64–320 kbps with resampling & channel conversion. Batch processor. |
 | Platform | Effects run in a Web Worker, PWA offline cache + OS “Open with…”, Electron desktop app (mic-only permissions, external links sandboxed), Capacitor Android/iOS with native share/save |

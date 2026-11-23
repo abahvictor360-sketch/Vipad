@@ -1,5 +1,5 @@
 import { AudioData } from './buffer';
-import { EFFECTS_BY_ID, Params } from './effects';
+import { EFFECTS_BY_ID, EffectContext, Params } from './effects';
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -25,13 +25,19 @@ function getWorker(): Worker | null {
 }
 
 /** Run an effect off the main thread (falls back to the main thread if workers are unavailable). */
-export function runEffect(effectId: string, a: AudioData, params: Params): Promise<AudioData> {
+export function runEffect(effectId: string, a: AudioData, params: Params, ctx: EffectContext = {}): Promise<AudioData> {
   const w = getWorker();
-  if (!w) return Promise.resolve(EFFECTS_BY_ID[effectId].apply(a, params));
+  if (!w) {
+    try {
+      return Promise.resolve(EFFECTS_BY_ID[effectId].apply(a, params, ctx));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
   const id = ++seq;
   const channels = a.channels.map((c) => new Float32Array(c));
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    w.postMessage({ id, effectId, params, sampleRate: a.sampleRate, channels }, channels.map((c) => c.buffer));
+    w.postMessage({ id, effectId, params, sampleRate: a.sampleRate, channels, profile: ctx.profile }, channels.map((c) => c.buffer));
   });
 }

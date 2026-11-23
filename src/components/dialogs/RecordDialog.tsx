@@ -7,17 +7,23 @@ import { insert, mixInto, resample, matchChannels, length } from '../../audio/bu
 import { saveToLibrary } from '../../audio/library';
 import { formatTime } from '../../app/format';
 import { player } from '../../audio/player';
+import { useSettings } from '../../store/settings';
+import { useMultitrack } from '../../store/multitrack';
 
-type Dest = 'new' | 'insert' | 'overdub';
+type Dest = 'new' | 'insert' | 'overdub' | 'track';
 type Phase = 'idle' | 'recording' | 'paused' | 'saving';
 
 export function RecordDialog() {
   const doc = useEditor((s) => s.active());
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState('');
-  const [channels, setChannels] = useState<1 | 2>(1);
-  const [voice, setVoice] = useState(false);
-  const [dest, setDest] = useState<Dest>(doc ? 'insert' : 'new');
+  const settings = useSettings.getState();
+  const multitrack = useSettings((s) => s.multitrack);
+  const [channels, setChannels] = useState<1 | 2>(settings.recordChannels);
+  const [voice, setVoice] = useState(settings.recordVoiceProcessing);
+  const [playAlong, setPlayAlong] = useState(settings.recordPlayAlong);
+  const [dest, setDest] = useState<Dest>(multitrack ? 'track' : doc ? 'insert' : 'new');
+  const startPos = useRef(0);
   const [phase, setPhase] = useState<Phase>('idle');
   const [secs, setSecs] = useState(0);
   const [level, setLevel] = useState(0);
@@ -84,6 +90,11 @@ export function RecordDialog() {
       rec.current = r;
       history.current = [];
       setPhase('recording');
+      if (dest === 'track') {
+        const mt = useMultitrack.getState();
+        startPos.current = mt.cursor;
+        if (playAlong && mt.session.tracks.some((t) => t.clips.length)) player.play(mt.mix(), mt.cursor / mt.session.sampleRate);
+      }
       // labels become available after permission is granted
       Recorder.devices().then(setDevices).catch(() => undefined);
     } catch (e) {
@@ -104,14 +115,19 @@ export function RecordDialog() {
     setPhase('saving');
     const audio = await r.stop();
     rec.current = null;
+    player.stop();
     const st = useEditor.getState();
     st.setDialog(null);
     if (!length(audio)) return st.toast('Recording was empty', 'error');
     const stamp = new Date();
     const name = `Recording ${stamp.toLocaleDateString()} ${stamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    if (dest === 'new' || !doc) {
+    if (dest === 'track') {
+      const mt = useMultitrack.getState();
+      mt.addTrack(`Recording ${mt.session.tracks.length + 1}`, audio, startPos.current);
+      if (useSettings.getState().autoSaveRecordings) saveToLibrary(Math.random().toString(36).slice(2), name, audio).catch(() => undefined);
+    } else if (dest === 'new' || !doc) {
       const id = st.newDoc(name, audio);
-      saveToLibrary(id, name, audio).catch(() => undefined);
+      if (useSettings.getState().autoSaveRecordings) saveToLibrary(id, name, audio).catch(() => undefined);
     } else {
       const at = doc.selection?.start ?? doc.cursor;
       const clip = resample(matchChannels(audio, doc.audio.channels.length), doc.audio.sampleRate);
@@ -125,6 +141,7 @@ export function RecordDialog() {
 
   const cancel = async () => {
     if (rec.current) await rec.current.cancel();
+    player.stop();
     rec.current = null;
     useEditor.getState().setDialog(null);
   };
@@ -203,12 +220,19 @@ export function RecordDialog() {
             <div className="field">
               <span className="field-label">Record into</span>
               <select value={dest} onChange={(e) => setDest(e.target.value as Dest)}>
+                {multitrack && <option value="track">New multitrack track</option>}
                 <option value="new">New file</option>
                 <option value="insert" disabled={!doc}>Current file at cursor</option>
                 <option value="overdub" disabled={!doc}>Overdub (mix on top)</option>
               </select>
             </div>
           </div>
+          {dest === 'track' && (
+            <label className="check">
+              <input type="checkbox" checked={playAlong} onChange={(e) => setPlayAlong(e.target.checked)} />
+              Play the other tracks while recording (use headphones)
+            </label>
+          )}
           <label className="check">
             <input type="checkbox" checked={voice} onChange={(e) => setVoice(e.target.checked)} />
             Voice processing (echo cancel, noise suppression, auto gain) — best for calls, off for music

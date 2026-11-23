@@ -7,6 +7,7 @@ import { encodeWav, WavBitDepth } from '../../audio/wav';
 import { encodeMp3 } from '../../audio/mp3';
 import { formatBytes, formatTime } from '../../app/format';
 import { saveFile } from '../../app/platform';
+import { useSettings } from '../../store/settings';
 
 export type ExportFormat = 'wav' | 'mp3';
 
@@ -41,7 +42,10 @@ export function ExportDialog() {
   const doc = useEditor((s) => s.active());
   const [name, setName] = useState(doc?.name ?? 'vipad-audio');
   const [onlySel, setOnlySel] = useState(false);
-  const [o, setO] = useState<ExportOptions>({ format: 'mp3', bitDepth: 16, bitrate: 192, sampleRate: 'keep', channels: 'keep' });
+  const [o, setO] = useState<ExportOptions>(() => {
+    const s = useSettings.getState();
+    return { format: s.exportFormat, bitDepth: s.wavBitDepth, bitrate: s.mp3Bitrate, sampleRate: 'keep', channels: 'keep' };
+  });
   const close = () => useEditor.getState().setDialog(null);
   if (!doc) return null;
   const src = onlySel && doc.selection ? slice(doc.audio, doc.selection) : doc.audio;

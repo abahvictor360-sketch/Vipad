@@ -6,13 +6,16 @@ import { stats } from '../audio/analysis';
 import { length } from '../audio/buffer';
 import { formatDb, formatTime, formatBytes } from '../app/format';
 import { Spectrum } from './Meters';
+import { useSettings } from '../store/settings';
 
 type Panel = 'effects' | 'info' | 'markers';
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [panel, setPanel] = useState<Panel>('effects');
+  const showSpectrum = useSettings((s) => s.showSpectrum);
   const [q, setQ] = useState('');
   const doc = useEditor((s) => s.active());
+  const noiseProfile = useEditor((s) => s.noiseProfile);
   const st = useEditor.getState();
   const hasAudio = !!doc && length(doc.audio) > 0;
 
@@ -53,7 +56,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                     <button
                       key={e.id}
                       className="fx-item"
-                      disabled={!hasAudio || (e.stereoOnly && doc!.audio.channels.length < 2)}
+                      disabled={!hasAudio || (e.stereoOnly && doc!.audio.channels.length < 2) || (e.needsProfile && !noiseProfile)}
+                      title={e.needsProfile && !noiseProfile ? 'Grab a noise sample first (Restore → Grab Noise)' : undefined}
                       onClick={() => st.setDialog({ type: 'effect', effectId: e.id })}
                       data-testid={`sb-fx-${e.id}`}
                     >
@@ -119,10 +123,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         )}
       </div>
 
-      <div className="sb-spectrum">
-        <div className="sb-label">Spectrum</div>
-        <Spectrum />
-      </div>
+      {showSpectrum && (
+        <div className="sb-spectrum">
+          <div className="sb-label">Spectrum</div>
+          <Spectrum />
+        </div>
+      )}
     </aside>
   );
 }

@@ -8,12 +8,13 @@ import { formatTime, modKey } from '../../app/format';
 import { EFFECTS, EFFECTS_BY_ID, defaultParams } from '../../audio/effects';
 import { renderExport, ExportOptions } from './ExportDialog';
 import { saveFile } from '../../app/platform';
+import { useSettings } from '../../store/settings';
 
 const close = () => useEditor.getState().setDialog(null);
 
 export function NewDialog() {
-  const [rate, setRate] = useState(48000);
-  const [ch, setCh] = useState(2);
+  const [rate, setRate] = useState(() => useSettings.getState().newSampleRate);
+  const [ch, setCh] = useState<number>(() => useSettings.getState().newChannels);
   const [name, setName] = useState('Untitled');
   return (
     <Modal
@@ -74,7 +75,13 @@ const SHORTCUTS: [string, string][] = [
   [`${modKey}+E`, 'Export'],
   ['+ / −', 'Zoom in / out'],
   ['0', 'Zoom to fit'],
-  ['M', 'Add marker'],
+  ['M', 'Add marker (bookmark)'],
+  ['[ / ]', 'Previous / next marker'],
+  [`${modKey}+W`, 'Close file'],
+  [`${modKey}+Shift+S`, 'Save as'],
+  [`${modKey}+,`, 'Settings'],
+  ['S (multitrack)', 'Split clip at cursor'],
+  [`${modKey}+D (multitrack)`, 'Duplicate clip'],
   ['?', 'Show shortcuts'],
 ];
 

@@ -23,7 +23,7 @@ describe('effects registry', () => {
     const stereo = tone(SR, 2, 0.5, 440, -6);
     for (const e of EFFECTS) {
       for (const src of [mono, stereo]) {
-        const out = e.apply(src, defaultParams(e));
+        const out = e.apply(src, defaultParams(e), { profile: noise(SR, src.channels.length, 0.3, 'white', -40) });
         expect(out.channels.length, e.id).toBe(src.channels.length);
         for (const c of out.channels) for (let i = 0; i < c.length; i += 97) expect(Number.isFinite(c[i]), `${e.id} @${i}`).toBe(true);
       }
@@ -152,5 +152,29 @@ describe('channel effects', () => {
   });
   it('invert flips sign', () => {
     expect(Array.from(run('invert', st()).channels[1])).toEqual([-0.5, -0.5]);
+  });
+});
+
+describe('noise-sample workflow', () => {
+  it('requires a profile and removes noise learned from it', () => {
+    const e = EFFECTS_BY_ID.denoiseSample;
+    const hiss = noise(SR, 1, 2, 'white', -30, 7);
+    expect(() => e.apply(hiss, defaultParams(e))).toThrow(/noise sample/i);
+    const profile: AudioData = { sampleRate: SR, channels: [hiss.channels[0].slice(0, SR / 2)] };
+    const out = e.apply(hiss, defaultParams(e), { profile });
+    expect(stats(hiss).rmsDb - stats(out, { start: 4000, end: 28000 }).rmsDb).toBeGreaterThan(12);
+  });
+  it('multi-band gate silences quiet broadband noise but passes a loud tone', () => {
+    const quiet = run('mbgate', noise(SR, 1, 1, 'white', -70));
+    expect(stats(quiet, { start: 4000, end: 16000 }).peakDb).toBeLessThan(-90);
+    const loud = run('mbgate', tone(SR, 1, 1, 1000, -6));
+    expect(stats(loud, { start: 4000, end: 16000 }).peakDb).toBeGreaterThan(-8);
+  });
+  it('manual click repair interpolates smoothly between the edges', () => {
+    const a: AudioData = { sampleRate: SR, channels: [Float32Array.from([0, 1, -1, 0.9, 0.5])] };
+    const out = run('interpolate', a).channels[0];
+    expect(out[0]).toBe(0);
+    expect(out[4]).toBeCloseTo(0.5);
+    for (let i = 1; i < 5; i++) expect(out[i]).toBeGreaterThanOrEqual(out[i - 1]);
   });
 });

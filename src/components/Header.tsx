@@ -10,8 +10,10 @@ import { Logo } from './Logo';
 import { zoom } from './Transport';
 import { convertChannels } from '../audio/effects';
 import { modKey } from '../app/format';
+import { MainMenu } from './MainMenu';
+import { useSettings } from '../store/settings';
 
-type Tab = 'home' | 'effects' | 'generate' | 'view' | 'tools';
+type Tab = 'home' | 'levels' | 'effects' | 'restore' | 'generate' | 'view' | 'tools';
 
 interface Btn { label: string; icon: React.ReactNode; onClick: () => void; title?: string; disabled?: boolean; testId?: string }
 
@@ -36,7 +38,9 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const doc = useEditor((s) => s.active());
   const clipboard = useEditor((s) => s.clipboard);
-  const follow = useEditor((s) => s.followPlayhead);
+  const follow = useSettings((s) => s.followPlayhead);
+  const multitrack = useSettings((s) => s.multitrack);
+  const noiseProfile = useEditor((s) => s.noiseProfile);
   useEditor((s) => s.docs); // re-render when history changes
   const st = useEditor.getState();
   const hasSel = !!doc?.selection;
@@ -82,6 +86,54 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           { label: 'Fade In', icon: <TrendingUp size={18} />, onClick: fx('fadeIn'), disabled: !hasAudio },
           { label: 'Fade Out', icon: <TrendingDown size={18} />, onClick: fx('fadeOut'), disabled: !hasAudio },
           { label: 'Clean Up', icon: <Sparkles size={18} />, onClick: fx('denoise'), disabled: !hasAudio, title: 'Noise reduction' },
+        ],
+      },
+    ],
+    levels: [
+      {
+        title: 'Levels',
+        items: [
+          { label: 'Amplify', icon: <Volume2 size={18} />, onClick: fx('amplify'), disabled: !hasAudio },
+          { label: 'Normalize', icon: <BarChart3 size={18} />, onClick: fx('normalize'), disabled: !hasAudio },
+          { label: 'Ramp', icon: <TrendingUp size={18} />, onClick: fx('envelope'), disabled: !hasAudio, title: 'Volume ramp' },
+          { label: 'Fade In', icon: <TrendingUp size={18} />, onClick: fx('fadeIn'), disabled: !hasAudio },
+          { label: 'Fade Out', icon: <TrendingDown size={18} />, onClick: fx('fadeOut'), disabled: !hasAudio },
+        ],
+      },
+      {
+        title: 'Dynamics',
+        items: [
+          { label: 'Compressor', icon: <Activity size={18} />, onClick: fx('compressor'), disabled: !hasAudio },
+          { label: 'Limiter', icon: <Activity size={18} />, onClick: fx('limiter'), disabled: !hasAudio },
+          { label: 'Noise Gate', icon: <Split size={18} />, onClick: fx('gate'), disabled: !hasAudio },
+        ],
+      },
+    ],
+    restore: [
+      {
+        title: 'Noise reduction',
+        items: [
+          { label: 'Grab Noise', icon: <ScanSearch size={18} />, onClick: st.grabNoiseSample, disabled: !hasSel, title: 'Grab Noise Sample — select a noise-only section first', testId: 'rb-grab-noise' },
+          { label: 'From Sample', icon: <Sparkles size={18} />, onClick: fx('denoiseSample'), disabled: !hasAudio || !noiseProfile, title: 'Apply Subtraction from Noise Sample', testId: 'rb-apply-noise' },
+          { label: 'Auto Spectral', icon: <Sparkles size={18} />, onClick: fx('denoise'), disabled: !hasAudio, title: 'Auto Spectral Subtraction' },
+          { label: 'Multi-band Gate', icon: <Split size={18} />, onClick: fx('mbgate'), disabled: !hasAudio },
+        ],
+      },
+      {
+        title: 'Repair',
+        items: [
+          { label: 'Click/Pop Auto', icon: <Eraser size={18} />, onClick: fx('declick'), disabled: !hasAudio },
+          { label: 'Click/Pop Manual', icon: <Eraser size={18} />, onClick: fx('interpolate'), disabled: !hasSel, title: 'Select a tiny region around the click first' },
+          { label: 'Hum', icon: <Eraser size={18} />, onClick: fx('notch'), disabled: !hasAudio },
+          { label: 'DC Offset', icon: <AudioLines size={18} />, onClick: fx('dc'), disabled: !hasAudio },
+        ],
+      },
+      {
+        title: 'Filters',
+        items: [
+          { label: 'High Pass', icon: <Wind size={18} />, onClick: fx('highpass'), disabled: !hasAudio },
+          { label: 'Low Pass', icon: <Wind size={18} />, onClick: fx('lowpass'), disabled: !hasAudio },
+          { label: 'Trim Silence', icon: <Crop size={18} />, onClick: fx('trimSilence'), disabled: !hasAudio },
         ],
       },
     ],
@@ -156,7 +208,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           { label: 'Zoom Out', icon: <ZoomOut size={18} />, onClick: () => zoom(2), disabled: !hasAudio },
           { label: 'Fit', icon: <Maximize2 size={18} />, onClick: () => zoom('fit'), disabled: !hasAudio },
           { label: 'Selection', icon: <ScanSearch size={18} />, onClick: () => zoom('selection'), disabled: !hasSel },
-          { label: follow ? 'Follow: On' : 'Follow: Off', icon: <Activity size={18} />, onClick: () => st.setFollow(!follow), title: 'Auto-scroll with the playhead' },
+          { label: follow ? 'Follow: On' : 'Follow: Off', icon: <Activity size={18} />, onClick: () => useSettings.getState().set({ followPlayhead: !follow }), title: 'Auto-scroll with the playhead' },
         ],
       },
       {
@@ -176,6 +228,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       {
         title: 'Tools',
         items: [
+          { label: 'Settings', icon: <SlidersHorizontal size={18} />, onClick: () => st.setDialog({ type: 'settings' }), testId: 'rb-settings' },
           { label: 'Batch', icon: <Layers size={18} />, onClick: () => st.setDialog({ type: 'batch' }) },
           { label: 'Library', icon: <Library size={18} />, onClick: () => st.setDialog({ type: 'library' }) },
           { label: 'Shortcuts', icon: <Keyboard size={18} />, onClick: () => st.setDialog({ type: 'shortcuts' }) },
@@ -185,23 +238,28 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     ],
   };
 
-  const TABS: [Tab, string][] = [['home', 'Home'], ['effects', 'Effects'], ['generate', 'Generate'], ['view', 'View'], ['tools', 'Tools']];
+  const TABS: [Tab, string][] = [['home', 'Home'], ['levels', 'Levels'], ['effects', 'Effects'], ['restore', 'Restore'], ['generate', 'Generate'], ['view', 'View'], ['tools', 'Tools']];
 
   return (
     <header className="app-header">
       <div className="topbar">
+        <MainMenu />
         <a className="brand" href="./" title="Vipad home">
           <Logo size={28} />
           <span>Vipad</span>
         </a>
-        <nav className="tabs" role="tablist" aria-label="Toolbar sections">
+        {multitrack ? <div className="tabs mt-title">Multitrack</div> : <nav className="tabs" role="tablist" aria-label="Toolbar sections">
           {TABS.map(([id, label]) => (
             <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)} data-testid={`tab-${id}`}>
               {label}
             </button>
           ))}
-        </nav>
+        </nav>}
         <div className="topbar-actions">
+          <label className="mt-switch" title="Turn multitrack mode on or off">
+            <span className="hide-sm">Multitrack</span>
+            <input type="checkbox" role="switch" aria-label="Multitrack mode" checked={multitrack} onChange={(e) => useSettings.getState().set({ multitrack: e.target.checked })} data-testid="multitrack-toggle" />
+          </label>
           <button className="btn btn-rec btn-sm" onClick={() => st.setDialog({ type: 'record' })}>
             <Circle size={12} fill="currentColor" /> <span className="hide-sm">Record</span>
           </button>
@@ -213,9 +271,11 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </button>
         </div>
       </div>
-      <div className="ribbon" role="toolbar" aria-label={`${tab} tools`}>
-        {groups[tab].map((g) => <Group key={g.title} {...g} />)}
-      </div>
+      {!multitrack && (
+        <div className="ribbon" role="toolbar" aria-label={`${tab} tools`}>
+          {groups[tab].map((g) => <Group key={g.title} {...g} />)}
+        </div>
+      )}
       <input
         ref={fileRef}
         type="file"

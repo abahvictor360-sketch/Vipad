@@ -4,6 +4,7 @@ import { computePeaks } from '../audio/analysis';
 import { length } from '../audio/buffer';
 import { player } from '../audio/player';
 import { formatTime } from '../app/format';
+import { useSettings } from '../store/settings';
 
 const LIME = '#c6ff3d';
 const MIN_SPP = 0.02;
@@ -59,7 +60,7 @@ export function Waveform({ doc }: { doc: Doc }) {
   const rulerRef = useRef<HTMLCanvasElement>(null);
   const peaksCache = useRef<{ key: string; peaks: Float32Array[] } | null>(null);
   const { setSelection, setCursor, updateView } = useEditor.getState();
-  const followPlayhead = useEditor((s) => s.followPlayhead);
+  const followPlayhead = useSettings((s) => s.followPlayhead);
 
   const width = size.w;
   const height = Math.max(80, size.h - RULER_H);
@@ -267,7 +268,7 @@ export function Waveform({ doc }: { doc: Doc }) {
           ctx.fill();
         }
         const st = useEditor.getState();
-        if (st.followPlayhead && doc.zoom !== null && (px > width * 0.92 || px < 0)) {
+        if (useSettings.getState().followPlayhead && doc.zoom !== null && (px > width * 0.92 || px < 0)) {
           st.updateView({ scroll: Math.max(0, pos - width * spp * 0.1) });
         }
         raf = requestAnimationFrame(draw);

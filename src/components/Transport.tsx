@@ -5,8 +5,11 @@ import { player } from '../audio/player';
 import { length } from '../audio/buffer';
 import { formatTime, parseTime } from '../app/format';
 import { LevelMeters } from './Meters';
+import { useSettings } from '../store/settings';
+import { useMultitrack } from '../store/multitrack';
+import { sessionLength } from '../audio/mixer';
 
-function usePlayhead(doc: Doc | null) {
+function usePlayhead(doc: Doc | null, mtCursorSec: number | null) {
   const [pos, setPos] = useState(0);
   const [playing, setPlaying] = useState(player.playing);
   useEffect(() => {
@@ -23,7 +26,7 @@ function usePlayhead(doc: Doc | null) {
     return () => { unsub(); cancelAnimationFrame(raf); };
   }, []);
   const sr = doc?.audio.sampleRate ?? 1;
-  return { playing, seconds: playing ? pos : (doc?.cursor ?? 0) / sr };
+  return { playing, seconds: playing ? pos : mtCursorSec ?? (doc?.cursor ?? 0) / sr };
 }
 
 function TimeField({ label, value, onCommit, testId }: { label: string; value: number; onCommit: (s: number) => void; testId?: string }) {
@@ -51,6 +54,16 @@ function TimeField({ label, value, onCommit, testId }: { label: string; value: n
 }
 
 export function zoom(factor: number | 'fit' | 'selection') {
+  if (useSettings.getState().multitrack) {
+    const mt = useMultitrack.getState();
+    if (factor === 'fit' || factor === 'selection') {
+      const total = sessionLength(mt.session) / mt.session.sampleRate;
+      const w = (document.querySelector<HTMLElement>('.mt-ruler')?.clientWidth ?? 800) - 10;
+      if (total) mt.setZoom(w / total);
+      mt.setScroll(0);
+    } else mt.setZoom(mt.pxPerSec / factor);
+    return;
+  }
   const st = useEditor.getState();
   const d = st.active();
   if (!d) return;
@@ -71,21 +84,28 @@ export function zoom(factor: number | 'fit' | 'selection') {
 }
 
 export function Transport() {
-  const doc = useEditor((s) => s.active());
+  const editorDoc = useEditor((s) => s.active());
   const loop = useEditor((s) => s.loop);
-  const { playing, seconds } = usePlayhead(doc);
+  const multitrack = useSettings((s) => s.multitrack);
+  const mt = useMultitrack();
+  const doc = multitrack ? null : editorDoc;
+  const { playing, seconds } = usePlayhead(doc, multitrack ? mt.cursor / mt.session.sampleRate : null);
   const [vol, setVol] = useState(1);
   const [rate, setRate] = useState(1);
   const st = useEditor.getState();
-  const sr = doc?.audio.sampleRate ?? 48000;
-  const n = doc ? length(doc.audio) : 0;
+  const sr = multitrack ? mt.session.sampleRate : doc?.audio.sampleRate ?? 48000;
+  const n = multitrack ? sessionLength(mt.session) : doc ? length(doc.audio) : 0;
   const sel = doc?.selection;
-  const disabled = !doc || !n;
+  const disabled = !n;
+  const toStart = () => {
+    if (multitrack) { mt.setCursor(0); mt.setScroll(0); } else { st.setCursor(0); st.updateView({ scroll: 0 }); }
+    if (player.playing) { player.stop(); st.togglePlay(); }
+  };
 
   return (
     <footer className="transport" aria-label="Transport">
       <div className="tp-group tp-buttons">
-        <button className="icon-btn" title="Go to start (Home)" aria-label="Go to start" disabled={disabled} onClick={() => { st.setCursor(0); st.updateView({ scroll: 0 }); if (player.playing) st.togglePlay(); }}>
+        <button className="icon-btn" title="Go to start (Home)" aria-label="Go to start" disabled={disabled} onClick={toStart}>
           <SkipBack size={18} />
         </button>
         <button className="play-btn" title="Play / Pause (Space)" aria-label={playing ? 'Pause' : 'Play'} disabled={disabled} onClick={st.togglePlay} data-testid="play">
@@ -94,7 +114,7 @@ export function Transport() {
         <button className="icon-btn" title="Stop" aria-label="Stop" disabled={disabled} onClick={st.stop}>
           <Square size={16} fill="currentColor" />
         </button>
-        <button className="icon-btn" title="Go to end (End)" aria-label="Go to end" disabled={disabled} onClick={() => st.setCursor(n)}>
+        <button className="icon-btn" title="Go to end (End)" aria-label="Go to end" disabled={disabled} onClick={() => (multitrack ? mt.setCursor(n) : st.setCursor(n))}>
           <SkipForward size={18} />
         </button>
         <button className="rec-btn" title="Record (R)" aria-label="Record" onClick={() => st.setDialog({ type: 'record' })} data-testid="record">
@@ -110,7 +130,7 @@ export function Transport() {
         <span className="clock-sub">/ {formatTime(n / sr)}</span>
       </div>
 
-      <div className="tp-group tp-sel">
+      <div className="tp-group tp-sel" hidden={multitrack}>
         <TimeField label="Start" testId="sel-start" value={sel ? sel.start / sr : (doc?.cursor ?? 0) / sr} onCommit={(s) => {
           const v = Math.round(s * sr);
           if (sel) st.setSelection({ start: v, end: Math.max(v, sel.end) });

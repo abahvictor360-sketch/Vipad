@@ -18,6 +18,10 @@ export type ParamDef =
 
 export type Params = Record<string, number | string>;
 
+export interface EffectContext {
+  profile?: AudioData;
+}
+
 export type EffectCategory = 'Volume' | 'Time & Pitch' | 'Filters & EQ' | 'Dynamics' | 'Restoration' | 'Special' | 'Channels';
 
 export interface EffectDef {
@@ -33,7 +37,9 @@ export interface EffectDef {
   tailMode?: 'replace' | 'mixTail';
   /** Requires stereo material. */
   stereoOnly?: boolean;
-  apply: (a: AudioData, p: Params) => AudioData;
+  /** Requires a noise profile captured with “Grab Noise Sample”. */
+  needsProfile?: boolean;
+  apply: (a: AudioData, p: Params, ctx?: EffectContext) => AudioData;
 }
 
 const num = (p: Params, k: string) => Number(p[k]);
@@ -486,6 +492,70 @@ export const EFFECTS: EffectDef[] = [
       { key: 'sensitivity', label: 'Sensitivity', type: 'number', min: 0.5, max: 4, step: 0.1, default: 1.5 },
     ],
     apply: (a, p) => spectralDenoise(a, num(p, 'reduction'), num(p, 'sensitivity')),
+  },
+  {
+    id: 'denoiseSample',
+    name: 'Noise Reduction (from Sample)',
+    category: 'Restoration',
+    description: 'Subtract the noise profile you captured with “Grab Noise Sample”.',
+    needsProfile: true,
+    params: [
+      { key: 'reduction', label: 'Reduction', type: 'number', min: 3, max: 48, step: 1, default: 24, unit: 'dB' },
+      { key: 'sensitivity', label: 'Sensitivity', type: 'number', min: 0.5, max: 4, step: 0.1, default: 1.5 },
+    ],
+    apply: (a, p, ctx) => {
+      if (!ctx?.profile) throw new Error('Grab a noise sample first: select a section containing only background noise, then choose “Grab Noise Sample”.');
+      return spectralDenoise(a, num(p, 'reduction'), num(p, 'sensitivity'), ctx.profile);
+    },
+  },
+  {
+    id: 'mbgate',
+    name: 'Multi-band Noise Gate',
+    category: 'Restoration',
+    description: 'Gate low, mid and high bands independently — removes hiss and rumble between words.',
+    params: [
+      { key: 'low', label: 'Low band threshold (<250 Hz)', type: 'number', min: -90, max: 0, step: 1, default: -50, unit: 'dB' },
+      { key: 'mid', label: 'Mid band threshold', type: 'number', min: -90, max: 0, step: 1, default: -48, unit: 'dB' },
+      { key: 'high', label: 'High band threshold (>4 kHz)', type: 'number', min: -90, max: 0, step: 1, default: -52, unit: 'dB' },
+      { key: 'reduction', label: 'Reduction', type: 'number', min: 0, max: 80, step: 1, default: 30, unit: 'dB' },
+      { key: 'release', label: 'Release', type: 'number', min: 10, max: 1000, step: 5, default: 120, unit: 'ms' },
+    ],
+    apply: (a, p) => {
+      const sr = a.sampleRate;
+      const split = (c: Float32Array) => {
+        let low = applyBiquad(c, biquadCoeffs('lowpass', sr, 250));
+        low = applyBiquad(low, biquadCoeffs('lowpass', sr, 250));
+        let high = applyBiquad(c, biquadCoeffs('highpass', sr, 4000));
+        high = applyBiquad(high, biquadCoeffs('highpass', sr, 4000));
+        const mid = c.map((v, i) => v - low[i] - high[i]);
+        return [low, mid, high];
+      };
+      const bands = a.channels.map(split);
+      const red = num(p, 'reduction');
+      const ths = [num(p, 'low'), num(p, 'mid'), num(p, 'high')];
+      const gated = [0, 1, 2].map((b) =>
+        dynamics({ sampleRate: sr, channels: bands.map((x) => x[b]) }, (db) => (db < ths[b] ? -red : 0), 3, num(p, 'release')),
+      );
+      return mapChannels(a, (_c, ch) => gated[0].channels[ch].map((v, i) => v + gated[1].channels[ch][i] + gated[2].channels[ch][i]));
+    },
+  },
+  {
+    id: 'interpolate',
+    name: 'Click/Pop Removal (Manual)',
+    category: 'Restoration',
+    description: 'Select a tiny region around a click; it is redrawn smoothly from the surrounding audio.',
+    params: [],
+    apply: (a) =>
+      mapChannels(a, (c) => {
+        const n = c.length;
+        if (n < 3) return new Float32Array(c);
+        const s0 = c[0], s1 = c[n - 1];
+        return c.map((_, i) => {
+          const t = i / (n - 1);
+          const h = t * t * (3 - 2 * t); // smoothstep keeps the joins continuous
+          return s0 + (s1 - s0) * h;
+        });
+      }),
   },
   {
     id: 'dc',

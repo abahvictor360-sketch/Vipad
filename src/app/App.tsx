@@ -13,6 +13,10 @@ import { NewDialog, ShortcutsDialog, LibraryDialog, BatchDialog, AboutDialog } f
 import { length } from '../audio/buffer';
 import { player } from '../audio/player';
 import { Upload } from 'lucide-react';
+import { MultiTrack } from '../components/MultiTrack';
+import { SettingsDialog } from '../components/dialogs/SettingsDialog';
+import { useSettings } from '../store/settings';
+import { useMultitrack } from '../store/multitrack';
 
 function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
@@ -27,6 +31,7 @@ function Dialogs() {
     case 'library': return <LibraryDialog />;
     case 'batch': return <BatchDialog />;
     case 'about': return <AboutDialog />;
+    case 'settings': return <SettingsDialog />;
   }
 }
 
@@ -39,7 +44,27 @@ function useShortcuts() {
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       const run = (fn: () => void) => { e.preventDefault(); fn(); };
+      if (mod && e.key === ',') return run(() => st.setDialog({ type: 'settings' }));
+      if (useSettings.getState().multitrack) {
+        const mt = useMultitrack.getState();
+        if (mod && k === 'z' && e.shiftKey) return run(mt.redo);
+        if (mod && k === 'z') return run(mt.undo);
+        if (mod && k === 'y') return run(mt.redo);
+        if (mod && k === 'd') return run(mt.duplicateSelected);
+        if (mod) return;
+        if (e.key === ' ') return run(st.togglePlay);
+        if (e.key === 'Delete' || e.key === 'Backspace') return run(() => mt.selectedClipId && mt.removeClip(mt.selectedClipId));
+        if (k === 's') return run(() => void mt.splitSelected());
+        if (k === 'r') return run(() => st.setDialog({ type: 'record' }));
+        if (e.key === 'Home') return run(() => { mt.setCursor(0); mt.setScroll(0); });
+        if (e.key === '+' || e.key === '=') return run(() => mt.setZoom(mt.pxPerSec * 1.6));
+        if (e.key === '-') return run(() => mt.setZoom(mt.pxPerSec / 1.6));
+        if (e.key === '?') return run(() => st.setDialog({ type: 'shortcuts' }));
+        return;
+      }
       if (mod) {
+        if (k === 's' && e.shiftKey) return run(() => { const n = prompt('Save as', st.active()?.name ?? 'Untitled'); if (n) void st.saveAs(n); });
+        if (k === 'w') return run(() => { const d = st.active(); if (d && (!d.dirty || !useSettings.getState().confirmClose || confirm(`Close “${d.name}”? Unsaved changes will be lost.`))) st.closeDoc(d.id); });
         if (k === 'z' && e.shiftKey) return run(st.redo);
         if (k === 'z') return run(st.undo);
         if (k === 'y') return run(st.redo);
@@ -67,8 +92,10 @@ function useShortcuts() {
         case '-': return run(() => zoom(2));
         case '0': return run(() => zoom('fit'));
         case '?': return run(() => st.setDialog({ type: 'shortcuts' }));
-        case 'ArrowLeft': return run(() => d && st.setCursor(d.cursor - d.audio.sampleRate * (e.shiftKey ? 5 : 1)));
-        case 'ArrowRight': return run(() => d && st.setCursor(d.cursor + d.audio.sampleRate * (e.shiftKey ? 5 : 1)));
+        case 'ArrowLeft': return run(() => d && st.setCursor(d.cursor - d.audio.sampleRate * useSettings.getState().skipSeconds * (e.shiftKey ? 5 : 1)));
+        case 'ArrowRight': return run(() => d && st.setCursor(d.cursor + d.audio.sampleRate * useSettings.getState().skipSeconds * (e.shiftKey ? 5 : 1)));
+        case ']': return run(() => st.jumpMarker(1));
+        case '[': return run(() => st.jumpMarker(-1));
       }
       if (k === 'r') return run(() => st.setDialog({ type: 'record' }));
       if (k === 'l') return run(() => st.setLoop(!st.loop));
@@ -81,6 +108,7 @@ function useShortcuts() {
 
 export function App() {
   const doc = useEditor((s) => s.active());
+  const multitrack = useSettings((s) => s.multitrack);
   const [sidebar, setSidebar] = useState(() => window.innerWidth > 1100);
   const [dragOver, setDragOver] = useState(false);
   useShortcuts();
@@ -124,10 +152,12 @@ export function App() {
       }}
     >
       <Header onToggleSidebar={() => setSidebar((v) => !v)} />
-      <DocTabs />
+      {!multitrack && <DocTabs />}
       <div className="workspace">
         <main className="editor" aria-label="Editor">
-          {doc ? (
+          {multitrack ? (
+            <MultiTrack />
+          ) : doc ? (
             length(doc.audio) > 0 ? (
               <>
                 <Overview doc={doc} />
@@ -148,8 +178,8 @@ export function App() {
             <EmptyState onOpen={openPicker} />
           )}
         </main>
-        {sidebar && <div className="sb-scrim" onClick={() => setSidebar(false)} aria-hidden />}
-        <Sidebar open={sidebar} onClose={() => setSidebar(false)} />
+        {sidebar && !multitrack && <div className="sb-scrim" onClick={() => setSidebar(false)} aria-hidden />}
+        <Sidebar open={sidebar && !multitrack} onClose={() => setSidebar(false)} />
       </div>
       <Transport />
       <Dialogs />

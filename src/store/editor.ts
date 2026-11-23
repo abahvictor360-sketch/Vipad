@@ -7,6 +7,8 @@ import { runEffect } from '../audio/runEffect';
 import { player } from '../audio/player';
 import { decodeWav } from '../audio/wav';
 import { saveToLibrary } from '../audio/library';
+import { useSettings } from './settings';
+import { useMultitrack } from './multitrack';
 
 export interface Marker {
   id: string;
@@ -45,6 +47,7 @@ export type DialogState =
   | { type: 'library' }
   | { type: 'batch' }
   | { type: 'about' }
+  | { type: 'settings' }
   | null;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -61,6 +64,7 @@ interface EditorState {
   followPlayhead: boolean;
   snapToZero: boolean;
   lastParams: Record<string, Params>;
+  noiseProfile: AudioData | null;
 
   active: () => Doc | null;
   setDialog: (d: DialogState) => void;
@@ -92,6 +96,12 @@ interface EditorState {
   addMarker: () => void;
   removeMarker: (id: string) => void;
   saveActiveToLibrary: () => Promise<void>;
+  saveAs: (name: string) => Promise<void>;
+  saveAll: () => Promise<void>;
+  closeAll: () => void;
+  grabNoiseSample: () => void;
+  selectBetweenMarkers: () => void;
+  jumpMarker: (dir: 1 | -1) => void;
 
   togglePlay: () => void;
   stop: () => void;
@@ -148,6 +158,7 @@ export const useEditor = create<EditorState>((set, get) => {
     followPlayhead: true,
     snapToZero: false,
     lastParams: {},
+    noiseProfile: null,
 
     active: () => get().docs.find((d) => d.id === get().activeId) ?? null,
     setDialog: (dialog) => set({ dialog }),
@@ -166,7 +177,7 @@ export const useEditor = create<EditorState>((set, get) => {
         audio,
         selection: null,
         cursor: 0,
-        history: new History(),
+        history: new History(512 * 1024 * 1024, useSettings.getState().undoSteps),
         markers: [],
         dirty: false,
         zoom: null,
@@ -317,11 +328,13 @@ export const useEditor = create<EditorState>((set, get) => {
       if (!d || !e) return;
       if (B.length(d.audio) === 0) return get().toast('Nothing to process — record or open audio first');
       if (e.stereoOnly && d.audio.channels.length < 2) return get().toast(`${e.name} needs stereo audio`, 'error');
+      const profile = get().noiseProfile;
+      if (e.needsProfile && !profile) return get().toast('Grab a noise sample first: select a section with only background noise, then Restore → Grab Noise Sample.', 'error');
       const range = targetRange(d);
       set((s) => ({ busy: `Applying ${e.name}…`, lastParams: { ...s.lastParams, [effectId]: params } }));
       player.stop();
       try {
-        const processed = await runEffect(effectId, B.slice(d.audio, range), params);
+        const processed = await runEffect(effectId, B.slice(d.audio, range), params, { profile: profile ? B.resample(B.matchChannels(profile, d.audio.channels.length), d.audio.sampleRate) : undefined });
         // doc may have changed meanwhile
         const cur = get().docs.find((x) => x.id === d.id);
         if (!cur || cur.version !== d.version) throw new Error('Document changed while processing');
@@ -358,6 +371,50 @@ export const useEditor = create<EditorState>((set, get) => {
     },
     removeMarker: (id) => patchActive((x) => ({ markers: x.markers.filter((m) => m.id !== id) })),
 
+    saveAs: async (name) => {
+      const d = get().active();
+      if (!d) return;
+      const id = uid();
+      patchActive(() => ({ id, name }));
+      set({ activeId: id });
+      await get().saveActiveToLibrary();
+    },
+    saveAll: async () => {
+      const ids = get().docs.map((d) => d.id);
+      const prev = get().activeId;
+      for (const id of ids) {
+        set({ activeId: id });
+        await get().saveActiveToLibrary();
+      }
+      set({ activeId: prev });
+    },
+    closeAll: () => {
+      player.stop();
+      set({ docs: [], activeId: null });
+    },
+    grabNoiseSample: () => {
+      const d = get().active();
+      if (!d?.selection) return get().toast('Select a short section that contains only background noise, then grab it.', 'error');
+      const sample = B.slice(d.audio, d.selection);
+      set({ noiseProfile: sample });
+      get().toast(`Noise sample captured (${(B.length(sample) / sample.sampleRate).toFixed(2)} s). Now use “Apply Subtraction from Noise Sample”.`, 'success');
+    },
+    selectBetweenMarkers: () => {
+      const d = get().active();
+      if (!d) return;
+      const pos = d.cursor;
+      const before = [0, ...d.markers.map((m) => m.pos)].filter((p) => p <= pos);
+      const after = [...d.markers.map((m) => m.pos), B.length(d.audio)].filter((p) => p > pos);
+      get().setSelection({ start: Math.max(...before), end: Math.min(...after) });
+    },
+    jumpMarker: (dir) => {
+      const d = get().active();
+      if (!d || !d.markers.length) return;
+      const list = d.markers.map((m) => m.pos);
+      const next = dir > 0 ? list.find((p) => p > d.cursor) : [...list].reverse().find((p) => p < d.cursor);
+      if (next !== undefined) get().setCursor(next);
+    },
+
     saveActiveToLibrary: async () => {
       const d = get().active();
       if (!d) return;
@@ -371,6 +428,7 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     togglePlay: () => {
+      if (useSettings.getState().multitrack) return useMultitrack.getState().togglePlay();
       const d = get().active();
       if (!d) return;
       if (player.playing) {
