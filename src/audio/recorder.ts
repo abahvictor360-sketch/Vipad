@@ -70,6 +70,7 @@ export class Recorder {
     this.source.connect(this.analyser);
     this.numCh = opts.channels;
     this.chunks = [];
+    this.drained = 0;
     this.frames = 0;
     this.paused = false;
 
@@ -107,6 +108,23 @@ export class Recorder {
       mute.connect(this.ctx.destination);
       this.node = sp;
     }
+  }
+
+  private drained = 0;
+
+  /** Return audio captured since the previous drain (for crash-safe incremental saving). */
+  drain(): Float32Array[] | null {
+    const pending = this.chunks.slice(this.drained);
+    if (!pending.length) return null;
+    this.drained = this.chunks.length;
+    const n = pending.reduce((s, f) => s + f[0].length, 0);
+    const out = Array.from({ length: this.numCh }, () => new Float32Array(n));
+    let off = 0;
+    for (const f of pending) {
+      for (let ch = 0; ch < this.numCh; ch++) out[ch].set(f[ch], off);
+      off += f[0].length;
+    }
+    return out;
   }
 
   pause() { this.paused = true; }

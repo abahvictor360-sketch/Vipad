@@ -17,6 +17,10 @@ import { MultiTrack } from '../components/MultiTrack';
 import { SettingsDialog } from '../components/dialogs/SettingsDialog';
 import { useSettings } from '../store/settings';
 import { useMultitrack } from '../store/multitrack';
+import { startAutosave, flushNow, hasPendingWrites } from './autosave';
+import { isElectron } from './platform';
+
+let autosaveStarted = false;
 
 function Dialogs() {
   const dialog = useEditor((s) => s.dialog);
@@ -64,7 +68,7 @@ function useShortcuts() {
       }
       if (mod) {
         if (k === 's' && e.shiftKey) return run(() => { const n = prompt('Save as', st.active()?.name ?? 'Untitled'); if (n) void st.saveAs(n); });
-        if (k === 'w') return run(() => { const d = st.active(); if (d && (!d.dirty || !useSettings.getState().confirmClose || confirm(`Close “${d.name}”? Unsaved changes will be lost.`))) st.closeDoc(d.id); });
+        if (k === 'w') return run(() => { const d = st.active(); if (d && (!d.dirty || !useSettings.getState().confirmClose || confirm(`Close “${d.name}”?\n\nIt stays recoverable for 30 days in Library → Recently closed.`))) st.closeDoc(d.id); });
         if (k === 'z' && e.shiftKey) return run(st.redo);
         if (k === 'z') return run(st.undo);
         if (k === 'y') return run(st.redo);
@@ -113,10 +117,18 @@ export function App() {
   const [dragOver, setDragOver] = useState(false);
   useShortcuts();
 
-  // warn before leaving with unsaved edits
+  // restore the previous session and keep everything autosaved
+  useEffect(() => {
+    if (autosaveStarted) return;
+    autosaveStarted = true;
+    void startAutosave();
+  }, []);
+
+  // everything is autosaved; only hold the page if a write is still in flight
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {
-      if (useEditor.getState().docs.some((d) => d.dirty)) { e.preventDefault(); e.returnValue = ''; }
+      flushNow();
+      if (!isElectron() && hasPendingWrites()) { e.preventDefault(); e.returnValue = ''; }
     };
     window.addEventListener('beforeunload', h);
     return () => window.removeEventListener('beforeunload', h);

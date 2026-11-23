@@ -71,7 +71,7 @@ interface EditorState {
   toast: (text: string, kind?: Toast['kind']) => void;
   dismissToast: (id: number) => void;
 
-  newDoc: (name: string, audio: AudioData) => string;
+  newDoc: (name: string, audio: AudioData, opts?: { id?: string; markers?: Marker[]; dirty?: boolean; background?: boolean }) => string;
   openFiles: (files: File[] | FileList) => Promise<void>;
   closeDoc: (id: string) => void;
   setActive: (id: string) => void;
@@ -169,8 +169,8 @@ export const useEditor = create<EditorState>((set, get) => {
     },
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
-    newDoc: (name, audio) => {
-      const id = uid();
+    newDoc: (name, audio, opts = {}) => {
+      const id = opts.id ?? uid();
       const doc: Doc = {
         id,
         name,
@@ -178,14 +178,14 @@ export const useEditor = create<EditorState>((set, get) => {
         selection: null,
         cursor: 0,
         history: new History(512 * 1024 * 1024, useSettings.getState().undoSteps),
-        markers: [],
-        dirty: false,
+        markers: opts.markers ?? [],
+        dirty: opts.dirty ?? false,
         zoom: null,
         scroll: 0,
         version: 0,
       };
-      player.stop();
-      set((s) => ({ docs: [...s.docs, doc], activeId: id }));
+      if (!opts.background) player.stop();
+      set((s) => ({ docs: [...s.docs, doc], activeId: opts.background && s.activeId ? s.activeId : id }));
       return id;
     },
 

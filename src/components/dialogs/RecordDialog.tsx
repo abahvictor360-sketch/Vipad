@@ -9,6 +9,7 @@ import { formatTime } from '../../app/format';
 import { player } from '../../audio/player';
 import { useSettings } from '../../store/settings';
 import { useMultitrack } from '../../store/multitrack';
+import { RecordingGuard } from '../../app/autosave';
 
 type Dest = 'new' | 'insert' | 'overdub' | 'track';
 type Phase = 'idle' | 'recording' | 'paused' | 'saving';
@@ -29,6 +30,7 @@ export function RecordDialog() {
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const rec = useRef<Recorder | null>(null);
+  const guard = useRef<RecordingGuard | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const history = useRef<number[]>([]);
 
@@ -89,6 +91,9 @@ export function RecordDialog() {
       await r.start({ deviceId: deviceId || undefined, channels, echoCancellation: voice, noiseSuppression: voice, autoGainControl: voice });
       rec.current = r;
       history.current = [];
+      const g = new RecordingGuard(() => r.drain());
+      guard.current = g;
+      void g.start(`Recording ${new Date().toLocaleString()}`, r.sampleRate, channels);
       setPhase('recording');
       if (dest === 'track') {
         const mt = useMultitrack.getState();
@@ -113,6 +118,7 @@ export function RecordDialog() {
     const r = rec.current;
     if (!r) return;
     setPhase('saving');
+    guard.current?.flush();
     const audio = await r.stop();
     rec.current = null;
     player.stop();
@@ -136,11 +142,17 @@ export function RecordDialog() {
         selection: { start: at, end: at + length(clip) },
       }));
     }
+    // the take is now in a document that is autosaved; drop the in-progress copy
+    void guard.current?.done();
+    guard.current = null;
     st.toast(`Recorded ${formatTime(length(audio) / audio.sampleRate)}`, 'success');
   };
 
   const cancel = async () => {
+    if (rec.current && rec.current.seconds > 3 && !confirm('Discard this recording? It cannot be recovered.')) return;
     if (rec.current) await rec.current.cancel();
+    void guard.current?.done();
+    guard.current = null;
     player.stop();
     rec.current = null;
     useEditor.getState().setDialog(null);

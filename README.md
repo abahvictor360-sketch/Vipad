@@ -4,6 +4,8 @@ Vipad is a fast, private audio recorder and editor that runs on **Windows, macOS
 
 - **Landing page:** `index.html` → download buttons for every platform
 - **Editor:** `app.html` (installable PWA, works offline)
+- **Downloads:** `download.html` — every platform, live version/size from the latest GitHub Release
+- **Guide:** `guide.html` — step-by-step with screenshots (regenerate with `npm run guide:shots` while `vite preview` runs)
 
 ## Features
 
@@ -17,6 +19,7 @@ Vipad is a fast, private audio recorder and editor that runs on **Windows, macOS
 | Effects (34) | Grab Noise Sample + Apply Subtraction from Noise Sample, Multi-band noise gate, Click/Pop removal (auto & manual), Amplify, Normalize, Fade in/out, Volume ramp, 10-band EQ, Low/High/Band-pass, Bass, Treble, Compressor, Limiter, Noise gate, Noise reduction (spectral), Hum notch, De-click, DC offset, Auto-trim silence, Speed, Tempo (WSOLA, keeps pitch), Pitch (keeps length), Reverse, Echo, Reverb, Chorus, Tremolo, Distortion, Telephone, Invert, Pan, Swap channels, Vocal remover, Stereo width |
 | Generate | Tones (sine/square/saw/triangle), white/pink/brown noise, silence, DTMF |
 | Files | Open WAV (native 8/16/24/32-bit & float), MP3, OGG, FLAC, M4A/AAC, WebM, Opus. Export WAV 8/16/24/32f and MP3 64–320 kbps with resampling & channel conversion. Batch processor. |
+| Never lose work | Every open file, the multitrack session and recordings *while they record* (2-second chunks) are autosaved to IndexedDB with persistent storage; reopening after a crash/close restores everything, interrupted takes are rebuilt, closed files stay restorable for 30 days |
 | Platform | Effects run in a Web Worker, PWA offline cache + OS “Open with…”, Electron desktop app (mic-only permissions, external links sandboxed), Capacitor Android/iOS with native share/save |
 
 All DSP lives in `src/audio/` as pure, framework-free TypeScript and is unit tested.
@@ -41,7 +44,7 @@ npm run test:e2e      # Playwright end-to-end (desktop, tablet, phone) against t
 | Android | `npm run cap:sync && cd android && ./gradlew assembleRelease` | `android/app/build/outputs/apk/release/app-release.apk` |
 | iOS | `npm run cap:sync && npx cap open ios` (Xcode) | App Store / TestFlight build |
 
-CI (`.github/workflows/build.yml`) builds every platform on each push. **Push a tag like `v1.0.0` to publish a GitHub Release** — the landing page's download buttons always point to the latest release.
+CI (`.github/workflows/build.yml`) builds every platform on each push, and every push to the default branch publishes/updates the GitHub Release for the version in `package.json` (bump the version for a new release). The download page always points to the latest release. iOS ships as an unsigned `.ipa` for AltStore/Sideloadly plus the PWA.
 
 ### Signing (optional, recommended for public release)
 

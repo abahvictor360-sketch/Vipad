@@ -9,6 +9,8 @@ import { EFFECTS, EFFECTS_BY_ID, defaultParams } from '../../audio/effects';
 import { renderExport, ExportOptions } from './ExportDialog';
 import { saveFile } from '../../app/platform';
 import { useSettings } from '../../store/settings';
+import { allDocs, deleteDoc, StoredDoc, putDoc, RETENTION_MS } from '../../audio/recovery';
+import { RotateCcw } from 'lucide-react';
 
 const close = () => useEditor.getState().setDialog(null);
 
@@ -102,12 +104,49 @@ export function ShortcutsDialog() {
 
 export function LibraryDialog() {
   const [items, setItems] = useState<LibraryItem[] | null>(null);
+  const [closed, setClosed] = useState<StoredDoc[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const refresh = () => listLibrary().then(setItems).catch((e) => setErr(String(e?.message ?? e)));
+  const refresh = () => {
+    listLibrary().then(setItems).catch((e) => setErr(String(e?.message ?? e)));
+    allDocs().then((d) => setClosed(d.filter((x) => x.closedAt).sort((a, b) => b.closedAt! - a.closedAt!))).catch(() => setClosed([]));
+  };
   useEffect(() => { refresh(); }, []);
   return (
     <Modal title="Library" subtitle="Recordings and projects saved on this device." onClose={close} icon={<Library size={18} />} wide>
       {err && <div className="alert">{err}</div>}
+      {closed.length > 0 && (
+        <section className="lib-section" data-testid="recently-closed">
+          <h3>Recently closed <small>— recoverable for {RETENTION_MS / 86400000} days</small></h3>
+          <ul className="lib-list">
+            {closed.map((d) => (
+              <li key={d.id}>
+                <div className="lib-meta">
+                  <strong>{d.name}</strong>
+                  <span>{formatTime(d.channels[0].length / d.sampleRate, false)} · closed {new Date(d.closedAt!).toLocaleString()}</span>
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={async () => {
+                  await putDoc({ ...d, closedAt: null });
+                  const st = useEditor.getState();
+                  useSettings.getState().set({ multitrack: false });
+                  st.newDoc(d.name, { sampleRate: d.sampleRate, channels: d.channels }, { id: d.id, markers: d.markers, dirty: d.dirty });
+                  st.toast(`Restored “${d.name}”`, 'success');
+                  close();
+                }}>
+                  <RotateCcw size={14} /> Restore
+                </button>
+                <button className="icon-btn" aria-label={`Delete ${d.name} permanently`} onClick={async () => {
+                  if (!confirm(`Permanently delete “${d.name}”? This cannot be undone.`)) return;
+                  await deleteDoc(d.id);
+                  refresh();
+                }}>
+                  <Trash2 size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <h3>Saved files</h3>
+        </section>
+      )}
       {items === null ? (
         <p className="muted">Loading…</p>
       ) : items.length === 0 ? (

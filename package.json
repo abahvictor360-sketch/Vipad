@@ -24,7 +24,8 @@
     "cap:sync": "npm run build && cap sync",
     "android:apk": "npm run cap:sync && cd android && ./gradlew assembleRelease",
     "test:desktop": "xvfb-run -a node tests/e2e/desktop.electron.cjs release/linux-unpacked/vipad",
-    "test:all": "npm run typecheck && npm test && npm run build && npm run test:e2e"
+    "test:all": "npm run typecheck && npm test && npm run build && npm run test:e2e",
+    "guide:shots": "node scripts/guide-screenshots.cjs"
   },
   "devDependencies": {
     "@breezystack/lamejs": "^1.2.7",

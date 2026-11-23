@@ -1,6 +1,20 @@
 import { X, CheckCircle2, AlertTriangle, Info, Mic, FolderOpen, AudioLines, Loader2 } from 'lucide-react';
 import { useEditor } from '../store/editor';
 import { Logo } from './Logo';
+import { useSettings } from '../store/settings';
+import { useAutosave } from '../app/autosave';
+import { Cloud, CloudOff, RefreshCw } from 'lucide-react';
+
+export function AutosaveBadge() {
+  const { status } = useAutosave();
+  const label = status === 'saving' ? 'Saving…' : status === 'error' ? 'Autosave failed' : 'All changes saved on this device';
+  return (
+    <span className={`autosave autosave-${status}`} title={label} aria-live="polite" data-testid="autosave" data-status={status}>
+      {status === 'saving' ? <RefreshCw size={14} className="spin" /> : status === 'error' ? <CloudOff size={14} /> : <Cloud size={14} />}
+      <span className="hide-sm">{status === 'saving' ? 'Saving…' : status === 'error' ? 'Not saved' : 'Saved'}</span>
+    </span>
+  );
+}
 
 export function DocTabs() {
   const docs = useEditor((s) => s.docs);
@@ -19,7 +33,7 @@ export function DocTabs() {
             {d.name}
           </button>
           <button className="doc-tab-x" aria-label={`Close ${d.name}`} onClick={() => {
-            if (d.dirty && !confirm(`Close “${d.name}”? Unsaved changes will be lost (save it to your library first with Save).`)) return;
+            if (d.dirty && useSettings.getState().confirmClose && !confirm(`Close “${d.name}”?\n\nIt stays recoverable for 30 days in Library → Recently closed.`)) return;
             st.closeDoc(d.id);
           }}>
             <X size={13} />

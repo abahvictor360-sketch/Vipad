@@ -11,6 +11,7 @@ import { zoom } from './Transport';
 import { convertChannels } from '../audio/effects';
 import { modKey } from '../app/format';
 import { MainMenu } from './MainMenu';
+import { AutosaveBadge } from './Chrome';
 import { useSettings } from '../store/settings';
 
 type Tab = 'home' | 'levels' | 'effects' | 'restore' | 'generate' | 'view' | 'tools';
@@ -256,6 +257,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           ))}
         </nav>}
         <div className="topbar-actions">
+          <AutosaveBadge />
           <label className="mt-switch" title="Turn multitrack mode on or off">
             <span className="hide-sm">Multitrack</span>
             <input type="checkbox" role="switch" aria-label="Multitrack mode" checked={multitrack} onChange={(e) => useSettings.getState().set({ multitrack: e.target.checked })} data-testid="multitrack-toggle" />

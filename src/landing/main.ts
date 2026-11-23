@@ -1,73 +1,13 @@
-import '@fontsource-variable/inter';
-import '@fontsource/space-grotesk/500.css';
-import '@fontsource/space-grotesk/700.css';
-import '../styles/tokens.css';
-import './landing.css';
+import { wireCommon, currentOS, OS_NAMES, reduced } from './shared';
+import './download.css';
 
-export const REPO = 'abahvictor360-sketch/Vipad';
-const RELEASES = `https://github.com/${REPO}/releases`;
-const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+wireCommon();
 
-// ---- download links (latest release, stable asset names)
-document.querySelectorAll<HTMLAnchorElement>('[data-asset]').forEach((a) => {
-  a.href = `${RELEASES}/latest/download/${a.dataset.asset}`;
-  a.rel = 'noopener';
-});
-(document.getElementById('releases-link') as HTMLAnchorElement).href = RELEASES;
-(document.getElementById('source-link') as HTMLAnchorElement).href = `https://github.com/${REPO}`;
-document.getElementById('year')!.textContent = String(new Date().getFullYear());
-
-// ---- OS detection: highlight the right download
-export function detectOS(ua: string, platform = '', touchPoints = 0): string {
-  if (/android/i.test(ua)) return 'android';
-  if (/iphone|ipad|ipod/i.test(ua) || (/Mac/.test(platform) && touchPoints > 1)) return 'ios';
-  if (/win/i.test(platform) || /windows/i.test(ua)) return 'windows';
-  if (/mac/i.test(platform) || /mac os x/i.test(ua)) return 'mac';
-  if (/cros/i.test(ua)) return 'web';
-  if (/linux/i.test(platform) || /linux/i.test(ua)) return 'linux';
-  return 'web';
-}
-const os = detectOS(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
-const NAMES: Record<string, string> = { windows: 'Windows', mac: 'macOS', linux: 'Linux', android: 'Android', ios: 'iPhone & iPad', web: 'your browser' };
-const card = document.querySelector<HTMLElement>(`.dl[data-os="${os}"]`);
-if (card) {
-  card.classList.add('recommended');
-  card.insertAdjacentHTML('afterbegin', '<span class="badge">Recommended for you</span>');
-  card.parentElement?.prepend(card);
-}
-document.getElementById('detected')!.textContent = `Free for every platform — we detected ${NAMES[os]}.`;
+// hero + teaser buttons go to the download page with the visitor's platform pre-selected
+const os = currentOS();
 const heroBtn = document.getElementById('hero-download') as HTMLAnchorElement;
-heroBtn.textContent = os === 'ios' || os === 'web' ? 'Open Vipad now' : `Download for ${NAMES[os]}`;
-if (os === 'ios' || os === 'web') heroBtn.href = './app.html';
-else {
-  const asset = card?.querySelector<HTMLAnchorElement>('[data-asset]');
-  if (asset) heroBtn.href = asset.href;
-}
-
-// ---- mobile menu
-const menuBtn = document.querySelector<HTMLButtonElement>('.menu-btn')!;
-const menu = document.getElementById('mobile-menu')!;
-menuBtn.addEventListener('click', () => {
-  const open = menu.hasAttribute('hidden');
-  menu.toggleAttribute('hidden', !open);
-  menuBtn.setAttribute('aria-expanded', String(open));
-  document.body.classList.toggle('menu-open', open);
-});
-menu.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => {
-  menu.setAttribute('hidden', '');
-  menuBtn.setAttribute('aria-expanded', 'false');
-  document.body.classList.remove('menu-open');
-}));
-
-// ---- nav background on scroll
-const nav = document.querySelector('.nav')!;
-const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 10);
-window.addEventListener('scroll', onScroll, { passive: true });
-onScroll();
-
-// ---- reveal on scroll
-const io = new IntersectionObserver((entries) => entries.forEach((e) => e.isIntersecting && (e.target.classList.add('in'), io.unobserve(e.target))), { threshold: 0.12 });
-document.querySelectorAll('.card, .h2, .platform-grid li, .faq details').forEach((el) => { el.classList.add('reveal'); io.observe(el); });
+heroBtn.textContent = os === 'web' ? 'Download Vipad' : `Download for ${OS_NAMES[os]}`;
+heroBtn.href = `./download.html#${os}`;
 
 // ---- canvas helpers
 function fit(c: HTMLCanvasElement) {
