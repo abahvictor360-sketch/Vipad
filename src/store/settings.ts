@@ -36,6 +36,15 @@ export interface Settings {
   waveformStyle: 'filled' | 'outline';
   showSpectrum: boolean;
   skipSeconds: number;
+  // Vipad Link
+  linkName: string;
+  linkQuality: 'voice' | 'music' | 'hifi';
+  linkLowLatency: boolean;
+  linkVoice: boolean;
+  linkTurnUrl: string;
+  linkTurnUser: string;
+  linkTurnPass: string;
+  vbanPort: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -70,6 +79,14 @@ export const DEFAULT_SETTINGS: Settings = {
   waveformStyle: 'filled',
   showSpectrum: true,
   skipSeconds: 1,
+  linkName: '',
+  linkQuality: 'music',
+  linkLowLatency: true,
+  linkVoice: false,
+  linkTurnUrl: '',
+  linkTurnUser: '',
+  linkTurnPass: '',
+  vbanPort: 6980,
 };
 
 const KEY = 'vipad.settings.v1';

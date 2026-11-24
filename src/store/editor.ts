@@ -53,6 +53,7 @@ export type DialogState =
   | { type: 'settings' }
   | { type: 'shortcut' }
   | { type: 'analysis' }
+  | { type: 'link'; tab?: 'receive' | 'send'; code?: string }
   | null;
 
 const uid = () => Math.random().toString(36).slice(2, 10);

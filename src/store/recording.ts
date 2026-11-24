@@ -2,6 +2,7 @@
  * Live, in-editor recording (WavePad-style): the take draws in the main view while it records,
  * the transport shows the record state and a moving input meter. Used by every Record entry point.
  */
+import { useLink } from '../link/store';
 import { create } from 'zustand';
 import { Recorder } from '../audio/recorder';
 import { AudioData, insert, length, matchChannels, mixInto, resample, createSilence } from '../audio/buffer';
@@ -78,6 +79,7 @@ export const useRecording = create<RecordingState>((set, get) => ({
         echoCancellation: s.recordVoiceProcessing,
         noiseSuppression: s.recordVoiceProcessing,
         autoGainControl: s.recordVoiceProcessing,
+        stream: linkInput() ?? undefined,
       });
     } catch (e) {
       // a remembered device may have been unplugged: fall back to the system default once
@@ -210,3 +212,9 @@ export const isRecording = () => {
 };
 
 export type { AudioData };
+
+/** When Vipad Link is receiving and "Record guests" is on, recordings capture the guests' mix. */
+function linkInput(): MediaStream | null {
+  const l = useLink.getState();
+  return l.role === 'host' && l.recordLink ? l.mixStream() : null;
+}

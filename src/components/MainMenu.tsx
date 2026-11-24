@@ -212,6 +212,7 @@ export function useMenus(loadRecent: boolean): Record<string, Item[]> {
       { label: 'Zoom to Fit', shortcut: '0', onClick: () => zoom('fit'), disabled: !hasAudio },
     ],
     Tools: [
+      { label: 'Vipad Link (network audio)…', onClick: () => ed.setDialog({ type: 'link' }), testId: 'menu-link' },
       { label: 'Settings…', shortcut: `${modKey}+,`, onClick: () => ed.setDialog({ type: 'settings' }), testId: 'menu-settings' },
       { label: 'Frequency & Loudness Analysis…', onClick: () => ed.setDialog({ type: 'analysis' }), disabled: !hasAudio, testId: 'menu-analysis' },
       { label: 'Batch Processor…', onClick: () => ed.setDialog({ type: 'batch' }) },

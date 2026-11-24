@@ -39,6 +39,18 @@ const { chromium } = require('playwright');
   const enc = await win.evaluate(async () => ({ secure: isSecureContext, opus: (await window.AudioEncoder?.isConfigSupported({ codec: 'opus', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }))?.supported ?? false }));
   console.log('encoders:', JSON.stringify(enc));
   if (!enc.opus) throw new Error('Opus encoder unavailable in desktop app');
+  // Vipad Link VBAN: send a packet to ourselves over UDP through the main process and receive it back
+  const vbanRes = await win.evaluate(() => new Promise((resolve) => {
+    const l = window.vipadDesktop.link;
+    const off = l.onVbanAudio((p) => { off(); resolve({ ok: true, sampleRate: p.sampleRate, channels: p.channels, n: p.samples.length, last: p.samples[p.samples.length - 1] }); });
+    setTimeout(() => resolve({ ok: false }), 4000);
+    void l.vbanRecvStart({ port: 26980, streamName: '' }).then(() => l.vbanSendStart({ host: '127.0.0.1', port: 26980, streamName: 'Smoke' })).then(() => {
+      const pcm = Int16Array.from({ length: 512 }, (_, i) => i);
+      l.vbanPacket(48000, 2, pcm);
+    });
+  }));
+  console.log('vban:', JSON.stringify(vbanRes));
+  if (!vbanRes.ok || vbanRes.n !== 512 || vbanRes.last !== 511) throw new Error('VBAN loopback failed');
   if (process.argv[3]) await win.screenshot({ path: process.argv[3] });
   console.log(JSON.stringify({ ok: true, title: await win.title(), page: win.url().replace(/.*\//, '') }));
   await browser.close().catch(() => {});

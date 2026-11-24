@@ -6,6 +6,8 @@ export interface RecorderOptions {
   echoCancellation: boolean;
   noiseSuppression: boolean;
   autoGainControl: boolean;
+  /** Record from an existing stream (e.g. Vipad Link guests) instead of opening a microphone. */
+  stream?: MediaStream;
 }
 
 const WORKLET = `
@@ -25,6 +27,7 @@ registerProcessor('vipad-capture', VipadCapture);
  * with ScriptProcessor fallback for older WebViews.
  */
 export class Recorder {
+  private ownsStream = true;
   ctx: AudioContext | null = null;
   analyser: AnalyserNode | null = null;
   stream: MediaStream | null = null;
@@ -65,8 +68,10 @@ export class Recorder {
   }
 
   async start(opts: RecorderOptions) {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access is not available in this browser (a secure https:// connection is required).');
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    this.ownsStream = !opts.stream;
+    if (opts.stream) this.stream = opts.stream;
+    else if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access is not available in this browser (a secure https:// connection is required).');
+    else this.stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: opts.deviceId ? { exact: opts.deviceId } : undefined,
         channelCount: { ideal: opts.channels },
@@ -200,7 +205,7 @@ export class Recorder {
     if (this.node instanceof AudioWorkletNode) this.node.port.postMessage('stop');
     this.node?.disconnect();
     this.source?.disconnect();
-    this.stream?.getTracks().forEach((t) => t.stop());
+    if (this.ownsStream) this.stream?.getTracks().forEach((t) => t.stop());
     const sr = this.sampleRate;
     await this.ctx?.close();
     const channels = Array.from({ length: this.numCh }, () => new Float32Array(this.frames));

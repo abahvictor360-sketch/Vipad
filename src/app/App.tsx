@@ -26,6 +26,8 @@ import { startAutosave, flushNow, hasPendingWrites } from './autosave';
 import { isElectron } from './platform';
 import { useRecording, isRecording } from '../store/recording';
 import { LiveRecording } from '../components/LiveRecording';
+import { normalizeCode } from '../link/protocol';
+import { LinkDialog } from '../components/dialogs/LinkDialog';
 
 let autosaveStarted = false;
 
@@ -45,6 +47,7 @@ function Dialogs() {
     case 'settings': return <SettingsDialog />;
     case 'shortcut': return <ShortcutDialog />;
     case 'analysis': return <AnalysisDialog />;
+    case 'link': return <LinkDialog tab={dialog.tab} code={dialog.code} />;
   }
 }
 
@@ -161,6 +164,13 @@ export function App() {
         params.delete('action');
         history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
         runAction(action);
+      }
+      // invite links: vipad…/app.html?link=ABC123 opens Vipad Link ready to send
+      const link = normalizeCode(params.get('link') ?? '');
+      if (link) {
+        params.delete('link');
+        history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
+        useEditor.getState().setDialog({ type: 'link', tab: 'send', code: link });
       }
     });
     listenForDesktopActions();

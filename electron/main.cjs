@@ -3,6 +3,8 @@ const { app, BrowserWindow, Menu, shell, session, dialog, ipcMain } = require('e
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const vban = require('./vban.cjs');
+const virtualMic = require('./virtualmic.cjs');
 
 const ACTIONS = ['record', 'multitrack', 'library', 'check-updates'];
 const actionFromArgv = (argv) => {
@@ -208,16 +210,51 @@ app.whenReady().then(() => {
   // Only grant the microphone; deny every other permission request.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {
     const audioOnly = permission === 'media' && (!details.mediaTypes || details.mediaTypes.every((t) => t === 'audio'));
-    cb(audioOnly || permission === 'clipboard-sanitized-write');
+    cb(audioOnly || permission === 'clipboard-sanitized-write' || permission === 'speaker-selection');
   });
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media');
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media' || permission === 'speaker-selection');
   ipcMain.handle('vipad:create-shortcut', () => createDesktopShortcut());
+  setupLinkIpc();
   buildMenu();
   setupQuickActions();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// ---------------------------------------------------------------- Vipad Link: VBAN + Linux virtual microphone
+let vbanTx = null;
+let vbanRx = null;
+function setupLinkIpc() {
+  ipcMain.handle('vipad:vmic-status', () => virtualMic.status());
+  ipcMain.handle('vipad:vmic-create', () => virtualMic.create());
+  ipcMain.handle('vipad:vmic-remove', () => virtualMic.remove());
+  ipcMain.handle('vipad:vban-send-start', (_e, opts) => {
+    vbanTx?.close();
+    vbanTx = vban.createSender({ host: String(opts.host), port: Number(opts.port) || vban.DEFAULT_PORT, streamName: String(opts.streamName || 'Vipad') });
+    return true;
+  });
+  ipcMain.on('vipad:vban-packet', (_e, sampleRate, channels, pcm) => vbanTx?.send(sampleRate, channels, new Int16Array(pcm.buffer ?? pcm, pcm.byteOffset ?? 0, (pcm.byteLength ?? pcm.length * 2) / 2)));
+  ipcMain.handle('vipad:vban-send-stop', () => { vbanTx?.close(); vbanTx = null; return true; });
+  ipcMain.handle('vipad:vban-recv-start', (e, opts) => {
+    vbanRx?.close();
+    const wc = e.sender;
+    vbanRx = vban.createReceiver({
+      port: Number(opts.port) || vban.DEFAULT_PORT,
+      streamName: String(opts.streamName || ''),
+      onAudio: (p) => !wc.isDestroyed() && wc.send('vipad:vban-audio', { sampleRate: p.sampleRate, channels: p.channels, streamName: p.streamName, from: p.from, samples: p.samples }),
+      onError: (err) => !wc.isDestroyed() && wc.send('vipad:vban-error', err.message),
+    });
+    return true;
+  });
+  ipcMain.handle('vipad:vban-recv-stop', () => { vbanRx?.close(); vbanRx = null; return true; });
+}
+
+app.on('will-quit', () => {
+  vbanTx?.close();
+  vbanRx?.close();
+  void virtualMic.remove();
 });
 
 app.on('window-all-closed', () => {

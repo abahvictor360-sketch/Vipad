@@ -15,6 +15,7 @@ import { AutosaveBadge } from './Chrome';
 import { useRecording } from '../store/recording';
 import { pickAndInsertFile } from '../app/pickFile';
 import { RecBadge } from './RecBadge';
+import { LinkBadge } from './dialogs/LinkDialog';
 import { MenuBar } from './MenuBar';
 import { useSettings } from '../store/settings';
 
@@ -258,6 +259,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         title: 'Tools',
         items: [
           { label: 'Settings', icon: <SlidersHorizontal size={18} />, onClick: () => st.setDialog({ type: 'settings' }), testId: 'rb-settings' },
+          { label: 'Vipad Link', icon: <Radio size={18} />, onClick: () => st.setDialog({ type: 'link' }), title: 'Send or receive audio over the network', testId: 'rb-link' },
           { label: 'Analysis', icon: <BarChart3 size={18} />, onClick: () => st.setDialog({ type: 'analysis' }), disabled: !hasAudio, title: 'Frequency & loudness analysis', testId: 'rb-analysis' },
           { label: 'Batch', icon: <Layers size={18} />, onClick: () => st.setDialog({ type: 'batch' }) },
           { label: 'Library', icon: <Library size={18} />, onClick: () => st.setDialog({ type: 'library' }) },
@@ -292,6 +294,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             <span className="hide-sm">Multitrack</span>
             <input type="checkbox" role="switch" aria-label="Multitrack mode" checked={multitrack} onChange={(e) => useSettings.getState().set({ multitrack: e.target.checked })} data-testid="multitrack-toggle" />
           </label>
+          <LinkBadge />
           <RecBadge />
           <button className="btn btn-primary btn-sm" disabled={!hasAudio} onClick={() => st.setDialog({ type: 'export' })}>
             <Download size={15} /> <span className="hide-sm">Export</span>

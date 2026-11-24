@@ -70,6 +70,17 @@ function Select<K extends keyof Settings>({ label, k, options }: { label: string
   );
 }
 
+function Text({ label, k, placeholder, type = 'text', hint }: { label: string; k: 'linkTurnUrl' | 'linkTurnUser' | 'linkTurnPass' | 'linkName'; placeholder?: string; type?: string; hint?: string }) {
+  const v = useSettings((s) => s[k]);
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      <input className="text-input" type={type} value={v} placeholder={placeholder} autoComplete="off" onChange={(e) => useSettings.getState().set({ [k]: e.target.value.trim() } as Partial<Settings>)} data-testid={`set-${k}`} />
+      {hint && <small className="field-hint">{hint}</small>}
+    </label>
+  );
+}
+
 export function SettingsDialog() {
   const close = () => useEditor.getState().setDialog(null);
   return (
@@ -128,6 +139,14 @@ export function SettingsDialog() {
           <Select k="wavBitDepth" label="WAV bit depth" options={[[16, '16-bit'], [24, '24-bit'], [32, '32-bit float']]} />
           <Select k="exportChannels" label="Channels" options={[['keep', 'Same as original'], ['mono', 'Mono'], ['stereo', 'Stereo']]} />
           <Select k="exportSampleRate" label="Sample rate" options={[['keep', 'Same as original'], [22050, '22.05 kHz'], [44100, '44.1 kHz (CD)'], [48000, '48 kHz (video)'], [96000, '96 kHz (hi-res)'], [192000, '192 kHz (studio)'], [225000, '225 kHz (maximum)']]} />
+        </section>
+        <section>
+          <h3>Vipad Link (network audio)</h3>
+          <Text k="linkName" label="This device’s name" placeholder="e.g. Studio Mac" />
+          <Text k="linkTurnUrl" label="TURN relay (optional)" placeholder="turn:relay.example.com:3478" hint="Only needed when devices on different networks can’t connect directly (strict office or mobile networks)." />
+          <Text k="linkTurnUser" label="TURN username" />
+          <Text k="linkTurnPass" label="TURN password" type="password" />
+          <Select k="vbanPort" label="VBAN UDP port (desktop app)" options={[[6980, '6980 (Voicemeeter default)'], [6981, '6981'], [6982, '6982'], [6990, '6990']]} />
         </section>
         <UpdatesSection />
       </div>
