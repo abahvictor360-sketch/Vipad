@@ -47,7 +47,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Only the editor works offline; marketing pages must always be fresh from the network.
-        globIgnores: ['index.html', 'download.html', 'guide.html', '404.html', 'guide/**', '**/main-*.js', '**/download-*.js', '**/guide-*.js', '**/main-*.css', '**/download-*.css', '**/guide-*.css'],
+        globIgnores: ['index.html', 'download.html', 'guide.html', 'support.html', '**/support-*.js', '**/support-*.css', '404.html', 'guide/**', '**/main-*.js', '**/download-*.js', '**/guide-*.js', '**/main-*.css', '**/download-*.css', '**/guide-*.css'],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: null,
@@ -63,6 +63,7 @@ export default defineConfig({
         app: resolve(__dirname, 'app.html'),
         download: resolve(__dirname, 'download.html'),
         guide: resolve(__dirname, 'guide.html'),
+        support: resolve(__dirname, 'support.html'),
         notFound: resolve(__dirname, '404.html'),
       },
     },

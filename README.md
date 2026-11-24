@@ -55,6 +55,12 @@ CI (`.github/workflows/build.yml`) builds every platform on each push, and every
 - **Windows / macOS:** add electron-builder's `CSC_LINK` / `CSC_KEY_PASSWORD` (and Apple notarization credentials) to remove “unknown developer” warnings.
 - **iOS:** requires an Apple Developer account; open `ios/App` in Xcode to archive. Until then iPhone/iPad users install the PWA (Safari → Share → Add to Home Screen).
 
+## Support page
+
+`support.html` lets individuals give (GitHub Sponsors, Paystack, Flutterwave) and businesses send a sponsorship enquiry.
+Edit `src/landing/support-config.ts` to set the links — a payment method with an empty link is hidden, and when
+`businessEmail` is empty the enquiry form opens a pre-filled GitHub issue instead of an email.
+
 ## Deploying the website
 
 The repo is Vercel-ready (`vercel.json`): framework Vite, output `dist/`. `/` is the landing page and `/app` is the editor.
