@@ -100,7 +100,7 @@ test.describe('multitrack', () => {
     await page.getByTestId('mt-record').click();
     await expect(page.getByTestId('live-recording')).toBeVisible();
     await page.waitForTimeout(1200);
-    await page.getByTestId('rec-stop').click();
+    await page.getByTestId('tp-stop').click();
     await expect.poll(async () => (await mtInfo(page)).tracks.length).toBe(1);
     const info = await mtInfo(page);
     expect(info.tracks[0].name).toMatch(/Recording/);

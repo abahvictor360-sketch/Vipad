@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Mic, Pause, Play, Square, Trash2 } from 'lucide-react';
 import { useRecording } from '../store/recording';
 import { Recorder } from '../audio/recorder';
 import { player } from '../audio/player';
@@ -48,21 +47,16 @@ function drawLane(ctx: CanvasRenderingContext2D, peaks: Float32Array, from: numb
 
 /** The take, drawn live in the editor while recording (overview + scrolling waveform). */
 export function LiveRecording() {
-  const { recorder, status, dest } = useRecording();
-  const st = useRecording.getState();
+  const { recorder, status } = useRecording();
   const overviewRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLCanvasElement>(null);
-  const [secs, setSecs] = useState(0);
 
   useEffect(() => {
     let raf = 0;
-    let lastSec = -1;
     const loop = () => {
       const r = recorder;
       const ov = overviewRef.current, mn = mainRef.current;
       if (r && ov && mn) {
-        const sec = r.seconds;
-        if (Math.floor(sec * 10) !== lastSec) { lastSec = Math.floor(sec * 10); setSecs(sec); }
         const blocksPerSec = r.sampleRate / Recorder.PEAK_BLOCK;
         const n = r.peakCount;
         const chs = r.livePeaks.length;
@@ -134,37 +128,15 @@ export function LiveRecording() {
     return () => cancelAnimationFrame(raf);
   }, [recorder]);
 
-  const paused = status === 'paused';
   const countdown = useRecording((s) => s.countdown);
   const [waiting, setWaiting] = useState(false);
   useEffect(() => {
     const id = setInterval(() => setWaiting(!!useRecording.getState().recorder?.waiting), 200);
     return () => clearInterval(id);
   }, []);
-  const label = recorder?.deviceLabel || 'Microphone';
 
   return (
     <div className="live-rec" data-testid="live-recording">
-      <div className="live-bar">
-        <span className={`live-state ${paused ? 'paused' : ''}`}>
-          <span className="live-dot" aria-hidden /> {status === 'saving' ? 'Saving…' : status === 'countdown' ? 'Get ready…' : paused ? 'Paused' : waiting ? 'Waiting for sound…' : 'Recording…'}
-        </span>
-        <span className="live-time" data-testid="rec-time">{formatTime(secs)}</span>
-        <span className="live-meta">
-          <Mic size={14} aria-hidden /> {label} · {recorder ? `${(recorder.sampleRate / 1000).toLocaleString()} kHz` : ''} · {recorder?.numCh === 1 ? 'Mono' : 'Stereo'}
-          {dest === 'track' ? ' · new multitrack track' : dest === 'overdub' ? ' · overdub' : dest === 'insert' ? ' · insert at cursor' : ''}
-        </span>
-        <span className="spacer" />
-        <button className="btn btn-ghost btn-sm" onClick={() => void st.cancel()} title="Discard this take">
-          <Trash2 size={15} /> <span className="hide-sm">Discard</span>
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={st.togglePause} data-testid="rec-pause">
-          {paused ? <Play size={15} /> : <Pause size={15} />} {paused ? 'Resume' : 'Pause'}
-        </button>
-        <button className="btn btn-rec btn-sm" onClick={() => void st.stop()} data-testid="rec-stop">
-          <Square size={13} fill="currentColor" /> Stop
-        </button>
-      </div>
       <canvas ref={overviewRef} className="live-overview" aria-hidden />
       <div className="live-main-wrap">
         <canvas ref={mainRef} className="live-main" role="img" aria-label="Live recording waveform" />

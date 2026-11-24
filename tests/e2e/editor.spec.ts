@@ -126,13 +126,13 @@ test.describe('editor', () => {
   test('records from the microphone (fake device), with pause/resume', async ({ page }) => {
     await page.getByTestId('empty-record').click();
     await expect(page.getByTestId('live-recording')).toBeVisible();
-    await expect(page.getByTestId('rec-time')).toBeVisible();
+    await expect(page.getByTestId('rec-badge')).toBeVisible();
     await page.waitForTimeout(1200);
-    await page.getByTestId('rec-pause').click();
+    await page.getByTestId('tp-rec-pause').click();
     await page.waitForTimeout(400);
-    await page.getByTestId('rec-pause').click();
+    await page.getByTestId('tp-rec-pause').click();
     await page.waitForTimeout(600);
-    await page.getByTestId('rec-stop').click();
+    await page.getByTestId('tp-stop').click();
     await expect.poll(async () => (await docInfo(page))?.name ?? '').toMatch(/^Recording/);
     const d = (await docInfo(page))!;
     const secs = d.length / d.sampleRate;

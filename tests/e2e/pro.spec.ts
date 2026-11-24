@@ -209,7 +209,7 @@ test.describe('professional editing features', () => {
     await expect(page.getByTestId('countdown')).toHaveCount(0, { timeout: 5000 });
     expect(await page.evaluate(() => (window as any).__vipadRec.getState().recorder.gateDb)).toBe(-40);
     await page.waitForTimeout(1500);
-    await page.getByTestId('rec-stop').click();
+    await page.getByTestId('tp-stop').click();
     await expect(page.getByTestId('waveform').or(page.getByTestId('empty-record'))).toBeVisible();
   });
 });

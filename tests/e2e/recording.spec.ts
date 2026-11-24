@@ -60,7 +60,7 @@ test.describe('live recording (in the editor)', () => {
     await expect(page.getByTestId('live-recording')).toBeVisible();
     await expect(page.locator('.doc-tab')).toHaveCount(2); // records into the new tab, no extra tab
     await page.waitForTimeout(1000);
-    await page.getByTestId('rec-stop').click();
+    await page.getByTestId('tp-stop').click();
     const d = (await docInfo(page))!;
     expect(d.name).toMatch(/^Recording/);
     expect(d.length).toBeGreaterThan(0);
@@ -78,7 +78,7 @@ test.describe('live recording (in the editor)', () => {
     await page.getByTestId('rec-dest').selectOption('insert');
     await page.getByTestId('rec-start').click();
     await page.waitForTimeout(800);
-    await page.getByTestId('rec-stop').click();
+    await page.getByTestId('tp-stop').click();
     await expect.poll(async () => (await docInfo(page))!.length).toBeGreaterThan(n);
     expect(await page.locator('.doc-tab').count()).toBe(1);
   });
@@ -114,7 +114,7 @@ test.describe('settings: microphone, master volume, side panel', () => {
     await page.getByTestId('empty-record').click();
     await expect(page.getByTestId('live-recording')).toBeVisible();
     await page.waitForTimeout(500);
-    await page.getByTestId('rec-stop').click();
+    await page.getByTestId('tp-stop').click();
     expect((await docInfo(page))!.length).toBeGreaterThan(0);
   });
 
