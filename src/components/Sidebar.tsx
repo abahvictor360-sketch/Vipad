@@ -5,10 +5,11 @@ import { EFFECTS, EFFECT_CATEGORIES } from '../audio/effects';
 import { stats } from '../audio/analysis';
 import { length } from '../audio/buffer';
 import { formatDb, formatTime, formatBytes } from '../app/format';
+import { measureLoudness } from '../audio/loudness';
 import { Spectrum } from './Meters';
 import { useSettings } from '../store/settings';
 
-type Panel = 'effects' | 'info' | 'markers';
+type Panel = 'effects' | 'info' | 'markers' | 'history';
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [panel, setPanel] = useState<Panel>('effects');
@@ -21,7 +22,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
   const info = useMemo(() => {
     if (!doc || panel !== 'info') return null;
-    return { all: stats(doc.audio), sel: doc.selection ? stats(doc.audio, doc.selection) : null };
+    return { all: stats(doc.audio), sel: doc.selection ? stats(doc.audio, doc.selection) : null, loud: length(doc.audio) < doc.audio.sampleRate * 600 ? measureLoudness(doc.audio) : null };
   }, [doc, panel]);
 
   const filtered = EFFECTS.filter((e) => (e.name + e.description + e.category).toLowerCase().includes(q.toLowerCase()));
@@ -30,7 +31,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     <aside className={`sidebar ${open ? 'open' : ''}`} aria-label="Side panel">
       <div className="sb-head">
         <div className="segmented sb-tabs" role="tablist">
-          {(['effects', 'info', 'markers'] as Panel[]).map((p) => (
+          {(['effects', 'info', 'markers', 'history'] as Panel[]).map((p) => (
             <button key={p} role="tab" aria-selected={panel === p} className={panel === p ? 'on' : ''} onClick={() => setPanel(p)}>
               {p[0].toUpperCase() + p.slice(1)}
             </button>
@@ -92,9 +93,38 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                   <div><dt>Sel. RMS</dt><dd>{formatDb(info.sel.rmsDb)}</dd></div>
                 </>
               )}
+              {info.loud && (
+                <>
+                  <div className="info-sep"><dt>Loudness</dt><dd data-testid="info-lufs">{Number.isFinite(info.loud.integrated) ? `${info.loud.integrated.toFixed(1)} LUFS` : '—'}</dd></div>
+                  <div><dt>True peak</dt><dd>{Number.isFinite(info.loud.truePeak) ? `${info.loud.truePeak.toFixed(1)} dBTP` : '—'}</dd></div>
+                  <div><dt>Loudness range</dt><dd>{info.loud.range.toFixed(1)} LU</dd></div>
+                </>
+              )}
               <div><dt>Undo steps</dt><dd>{doc.history.size}</dd></div>
             </dl>
           ) : <p className="muted pad">Open a file to see its details.</p>
+        )}
+
+        {panel === 'history' && (
+          doc ? (
+            <ol className="history-list" data-testid="history-list">
+              {(() => {
+                const done = doc.history.undoLabels;
+                const todo = doc.history.redoLabels;
+                const items = [{ label: `Opened “${doc.name}”`, i: 0 }, ...done.map((l, k) => ({ label: l, i: k + 1 })), ...todo.map((l, k) => ({ label: l, i: done.length + 1 + k }))];
+                const cur = done.length;
+                return items.map((it) => (
+                  <li key={it.i}>
+                    <button className={`hist-item ${it.i === cur ? 'current' : it.i > cur ? 'future' : ''}`} onClick={() => st.historyJump(it.i - cur)} data-testid={`hist-${it.i}`}>
+                      <span className="hist-n">{it.i}</span>
+                      <span>{it.label}</span>
+                      {it.i === cur && <em>current</em>}
+                    </button>
+                  </li>
+                ));
+              })()}
+            </ol>
+          ) : <p className="muted pad">Your edits will be listed here.</p>
         )}
 
         {panel === 'markers' && (

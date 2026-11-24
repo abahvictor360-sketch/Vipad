@@ -35,6 +35,10 @@ export class History<M = unknown> {
     return s;
   }
 
+  /** Labels of the actions that can be undone, oldest first. */
+  get undoLabels() { return this.undoStack.map((s) => s.label); }
+  /** Labels of the actions that can be redone, next first. */
+  get redoLabels() { return [...this.redoStack].reverse().map((s) => s.label); }
   get canUndo() { return this.undoStack.length > 0; }
   get canRedo() { return this.redoStack.length > 0; }
   get undoLabel() { return this.undoStack[this.undoStack.length - 1]?.label; }

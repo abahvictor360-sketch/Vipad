@@ -135,13 +135,19 @@ export function LiveRecording() {
   }, [recorder]);
 
   const paused = status === 'paused';
+  const countdown = useRecording((s) => s.countdown);
+  const [waiting, setWaiting] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => setWaiting(!!useRecording.getState().recorder?.waiting), 200);
+    return () => clearInterval(id);
+  }, []);
   const label = recorder?.deviceLabel || 'Microphone';
 
   return (
     <div className="live-rec" data-testid="live-recording">
       <div className="live-bar">
         <span className={`live-state ${paused ? 'paused' : ''}`}>
-          <span className="live-dot" aria-hidden /> {status === 'saving' ? 'Saving…' : paused ? 'Paused' : 'Recording…'}
+          <span className="live-dot" aria-hidden /> {status === 'saving' ? 'Saving…' : status === 'countdown' ? 'Get ready…' : paused ? 'Paused' : waiting ? 'Waiting for sound…' : 'Recording…'}
         </span>
         <span className="live-time" data-testid="rec-time">{formatTime(secs)}</span>
         <span className="live-meta">
@@ -160,7 +166,11 @@ export function LiveRecording() {
         </button>
       </div>
       <canvas ref={overviewRef} className="live-overview" aria-hidden />
-      <canvas ref={mainRef} className="live-main" role="img" aria-label="Live recording waveform" />
+      <div className="live-main-wrap">
+        <canvas ref={mainRef} className="live-main" role="img" aria-label="Live recording waveform" />
+        {status === 'countdown' && <div className="countdown" data-testid="countdown" aria-live="assertive">{countdown}</div>}
+        {waiting && status === 'recording' && <div className="waiting-badge">Sound-activated · waiting for sound</div>}
+      </div>
       {player.playing && <p className="live-note">Playing the existing audio while you record — use headphones to avoid echo.</p>}
     </div>
   );
@@ -188,7 +198,7 @@ export function DbMeter() {
       const w = W - 12; // room for clip light
       ctx.clearRect(0, 0, W, h);
       const rs = useRecording.getState();
-      const rec = rs.recorder && (rs.status === 'recording' || rs.status === 'paused') ? rs.recorder : null;
+      const rec = rs.recorder && (rs.status === 'recording' || rs.status === 'paused' || rs.status === 'countdown') ? rs.recorder : null;
       const inst = [0, 0];
       if (rec) {
         inst[0] = rec.levels[0] ?? 0;

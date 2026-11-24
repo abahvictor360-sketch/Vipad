@@ -9,7 +9,7 @@ test('mobile/tablet: editor works and has no horizontal overflow', async ({ page
   expect(overflow).toBe(false);
   await page.getByTestId('play').click();
   await page.waitForTimeout(300);
-  await page.getByRole('button', { name: 'Pause' }).click();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
 });
 
 test('mobile/tablet: landing has no horizontal overflow and menu works', async ({ page }) => {

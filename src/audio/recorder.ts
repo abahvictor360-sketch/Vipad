@@ -43,6 +43,12 @@ export class Recorder {
   static PEAK_BLOCK = 128;
   private acc: { n: number; mn: number[]; mx: number[] } = { n: 0, mn: [], mx: [] };
   deviceLabel = '';
+  /** Sound-activated recording: only keep audio while the input is above `gateDb` (with a short hold). */
+  gateDb: number | null = null;
+  gateHoldSec = 1;
+  /** True while sound-activated recording is waiting for sound. */
+  waiting = false;
+  private sinceLoud = Infinity;
 
   static async devices(): Promise<MediaDeviceInfo[]> {
     if (!navigator.mediaDevices?.enumerateDevices) return [];
@@ -99,6 +105,13 @@ export class Recorder {
       }
       this.peak = Math.max(pk, this.peak * 0.9);
       if (this.paused) return;
+      if (this.gateDb !== null) {
+        const len = chs[0]?.length ?? 0;
+        if (pk >= Math.pow(10, this.gateDb / 20)) this.sinceLoud = 0;
+        else this.sinceLoud += len;
+        this.waiting = this.sinceLoud > this.gateHoldSec * this.sampleRate;
+        if (this.waiting) return;
+      }
       const frame: Float32Array[] = [];
       for (let ch = 0; ch < this.numCh; ch++) frame.push(chs[Math.min(ch, chs.length - 1)]);
       this.chunks.push(frame);

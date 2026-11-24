@@ -6,6 +6,8 @@ import { EFFECTS_BY_ID, Params } from '../audio/effects';
 import { runEffect } from '../audio/runEffect';
 import { player } from '../audio/player';
 import { decodeWav } from '../audio/wav';
+import { isAiff, decodeAiff } from '../audio/codecs/aiff';
+import { isAu, decodeAu } from '../audio/codecs/au';
 import { saveToLibrary } from '../audio/library';
 import { useSettings } from './settings';
 import { useMultitrack } from './multitrack';
@@ -29,6 +31,7 @@ export interface Doc {
   zoom: number | null;
   scroll: number; // first visible sample
   version: number; // bumps on every audio change (cache key for views)
+  view: 'wave' | 'spectral';
 }
 
 export interface Toast {
@@ -49,6 +52,7 @@ export type DialogState =
   | { type: 'about' }
   | { type: 'settings' }
   | { type: 'shortcut' }
+  | { type: 'analysis' }
   | null;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -95,6 +99,17 @@ interface EditorState {
   applyEffect: (effectId: string, params: Params) => Promise<void>;
   convertDoc: (label: string, fn: (a: AudioData) => AudioData) => void;
   addMarker: () => void;
+  ampZoom: number;
+  setAmpZoom: (z: number) => void;
+  setView: (v: 'wave' | 'spectral') => void;
+  historyJump: (steps: number) => void;
+  snapSelection: () => void;
+  splitAtCursor: () => void;
+  splitAtMarkers: () => void;
+  splitBySilence: (thresholdDb?: number, minSilenceSec?: number) => void;
+  joinAll: () => void;
+  extractChannel: (ch: 0 | 1) => void;
+  insertFile: (f: File) => Promise<void>;
   removeMarker: (id: string) => void;
   saveActiveToLibrary: () => Promise<void>;
   saveAs: (name: string) => Promise<void>;
@@ -119,6 +134,8 @@ export async function decodeFile(file: Blob): Promise<AudioData> {
   const buf = await file.arrayBuffer();
   const head = new Uint8Array(buf, 0, Math.min(12, buf.byteLength));
   const isWav = String.fromCharCode(...head.slice(0, 4)) === 'RIFF' && String.fromCharCode(...head.slice(8, 12)) === 'WAVE';
+  if (isAiff(buf)) return decodeAiff(buf);
+  if (isAu(buf)) return decodeAu(buf);
   if (isWav) {
     try {
       return decodeWav(buf);
@@ -184,6 +201,7 @@ export const useEditor = create<EditorState>((set, get) => {
         zoom: null,
         scroll: 0,
         version: 0,
+        view: 'wave',
       };
       if (!opts.background) player.stop();
       set((s) => ({ docs: [...s.docs, doc], activeId: opts.background && s.activeId ? s.activeId : id }));
@@ -364,6 +382,104 @@ export const useEditor = create<EditorState>((set, get) => {
       get().edit(label, (a) => ({ audio: fn(a) }));
     },
 
+    ampZoom: 1,
+    setAmpZoom: (z) => set({ ampZoom: Math.max(1, Math.min(32, z)) }),
+    setView: (view) => patchActive(() => ({ view })),
+    historyJump: (steps) => {
+      const d = get().active();
+      if (!d || !steps) return;
+      player.stop();
+      for (let i = 0; i < Math.abs(steps); i++) {
+        const cur = get().active()!;
+        const label = steps < 0 ? cur.history.undoLabel ?? '' : cur.history.redoLabel ?? '';
+        const snap = steps < 0 ? cur.history.undo({ audio: cur.audio, label, meta: cur.markers }) : cur.history.redo({ audio: cur.audio, label, meta: cur.markers });
+        if (!snap) break;
+        patchActive((x) => ({ audio: snap.audio, markers: snap.meta ?? x.markers, selection: x.selection && B.clampRange(snap.audio, x.selection), cursor: Math.min(x.cursor, B.length(snap.audio)), version: x.version + 1, dirty: true }));
+      }
+      player.invalidate();
+    },
+    snapSelection: () => {
+      const d = get().active();
+      if (!d?.selection) return;
+      const zc = (pos: number) => {
+        const c = d.audio.channels[0];
+        const span = Math.round(d.audio.sampleRate * 0.005);
+        for (let k = 0; k <= span; k++) {
+          for (const i of [pos - k, pos + k]) if (i > 0 && i < c.length && (c[i - 1] <= 0) !== (c[i] <= 0)) return i;
+        }
+        return pos;
+      };
+      patchActive((x) => ({ selection: x.selection && { start: zc(x.selection.start), end: zc(x.selection.end) } }));
+    },
+    splitAtCursor: () => {
+      const d = get().active();
+      if (!d || !d.cursor || d.cursor >= B.length(d.audio)) return get().toast('Place the cursor inside the audio to split it', 'error');
+      const at = d.selection?.start ?? d.cursor;
+      get().newDoc(`${d.name} (1)`, B.slice(d.audio, { start: 0, end: at }), { background: true });
+      get().newDoc(`${d.name} (2)`, B.slice(d.audio, { start: at, end: B.length(d.audio) }));
+      get().toast('Split into two new files', 'success');
+    },
+    splitAtMarkers: () => {
+      const d = get().active();
+      if (!d?.markers.length) return get().toast('Add markers (M) where you want to split first', 'error');
+      const cuts = [0, ...d.markers.map((m) => m.pos).filter((p) => p > 0 && p < B.length(d.audio)), B.length(d.audio)];
+      let n = 0;
+      for (let i = 0; i < cuts.length - 1; i++) {
+        if (cuts[i + 1] - cuts[i] < 2) continue;
+        get().newDoc(`${d.name} (${++n})`, B.slice(d.audio, { start: cuts[i], end: cuts[i + 1] }), { background: i < cuts.length - 2 });
+      }
+      get().toast(`Split into ${n} files at markers`, 'success');
+    },
+    splitBySilence: (thresholdDb = -45, minSilenceSec = 0.6) => {
+      const d = get().active();
+      if (!d) return;
+      const a = d.audio, n = B.length(a), sr = a.sampleRate;
+      const th = Math.pow(10, thresholdDb / 20), win = Math.max(1, Math.round(sr * 0.01)), minWin = Math.round(minSilenceSec / 0.01);
+      const loud: boolean[] = [];
+      for (let w = 0; w * win < n; w++) {
+        let pk = 0;
+        for (const c of a.channels) for (let i = w * win; i < Math.min(n, (w + 1) * win); i++) pk = Math.max(pk, Math.abs(c[i]));
+        loud.push(pk >= th);
+      }
+      const parts: [number, number][] = [];
+      let start = -1, quiet = 0;
+      loud.forEach((l, w) => {
+        if (l) { if (start < 0) start = w; quiet = 0; }
+        else if (start >= 0 && ++quiet >= minWin) { parts.push([start, w - quiet + 1]); start = -1; quiet = 0; }
+      });
+      if (start >= 0) parts.push([start, loud.length]);
+      if (parts.length < 2) return get().toast('No silent gaps long enough to split on', 'error');
+      const pad = 0.05;
+      parts.forEach(([s, e], i) => {
+        const r = { start: Math.max(0, Math.round((s * 0.01 - pad) * sr)), end: Math.min(n, Math.round((e * 0.01 + pad) * sr)) };
+        get().newDoc(`${d.name} (${i + 1})`, B.slice(a, r), { background: i < parts.length - 1 });
+      });
+      get().toast(`Split into ${parts.length} files by silence`, 'success');
+    },
+    joinAll: () => {
+      const docs = get().docs.filter((x) => B.length(x.audio) > 0);
+      if (docs.length < 2) return get().toast('Open two or more files to join them', 'error');
+      let out = B.clone(docs[0].audio);
+      for (const x of docs.slice(1)) out = B.concat(out, x.audio);
+      get().newDoc('Joined', out);
+      get().toast(`Joined ${docs.length} files (in tab order)`, 'success');
+    },
+    extractChannel: (ch) => {
+      const d = get().active();
+      if (!d || d.audio.channels.length < 2) return get().toast('Channel extraction needs a stereo file', 'error');
+      get().newDoc(`${d.name} (${ch ? 'Right' : 'Left'})`, { sampleRate: d.audio.sampleRate, channels: [new Float32Array(d.audio.channels[ch])] });
+    },
+    insertFile: async (f) => {
+      const d = get().active();
+      try {
+        const clip = await decodeFile(f);
+        if (!d) { get().newDoc(f.name.replace(/\.[^.]+$/, ''), clip); return; }
+        get().insertAudio(`Insert ${f.name}`, clip);
+        get().toast(`Inserted ${f.name} at the cursor`, 'success');
+      } catch (e) {
+        get().toast(`Could not insert ${f.name}: ${(e as Error).message}`, 'error');
+      }
+    },
     addMarker: () => {
       const d = get().active();
       if (!d) return;

@@ -1,44 +1,62 @@
 import { AudioData, length } from './buffer';
+import { linearToUlaw, linearToAlaw, ulawToLinear, alawToLinear } from './codecs/g711';
+import { Tags, hasTags, riffInfo } from './codecs/tags';
 
 export type WavBitDepth = 8 | 16 | 24 | 32;
 
-/** Encode PCM WAV (8/16/24-bit integer or 32-bit float), with TPDF dither for integer formats. */
-export function encodeWav(a: AudioData, bitDepth: WavBitDepth = 16, dither = true): ArrayBuffer {
+/** Encode WAV: PCM 8/16/24-bit, 32-bit float, or 8-bit µ-law / A-law; optional LIST/INFO metadata. TPDF dither for integer PCM. */
+export function encodeWav(a: AudioData, bitDepth: WavBitDepth = 16, dither = true, opts: { encoding?: 'pcm' | 'ulaw' | 'alaw'; tags?: Tags } = {}): ArrayBuffer {
   const numCh = a.channels.length;
   const n = length(a);
-  const bps = bitDepth / 8;
-  const isFloat = bitDepth === 32;
+  const enc = opts.encoding ?? 'pcm';
+  const g711 = enc !== 'pcm';
+  const bits = g711 ? 8 : bitDepth;
+  const bps = bits / 8;
+  const isFloat = !g711 && bitDepth === 32;
   const dataSize = n * numCh * bps;
-  const buf = new ArrayBuffer(44 + dataSize);
+  const info = opts.tags && hasTags(opts.tags) ? riffInfo(opts.tags) : new Uint8Array(0);
+  const fmtSize = g711 ? 18 : 16;
+  const factSize = g711 ? 12 : 0;
+  const pad = dataSize & 1;
+  const total = 12 + 8 + fmtSize + factSize + 8 + dataSize + pad + info.length;
+  const buf = new ArrayBuffer(total);
   const v = new DataView(buf);
   const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
   str(0, 'RIFF');
-  v.setUint32(4, 36 + dataSize, true);
+  v.setUint32(4, total - 8, true);
   str(8, 'WAVE');
   str(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, isFloat ? 3 : 1, true);
+  v.setUint32(16, fmtSize, true);
+  v.setUint16(20, enc === 'ulaw' ? 7 : enc === 'alaw' ? 6 : isFloat ? 3 : 1, true);
   v.setUint16(22, numCh, true);
   v.setUint32(24, a.sampleRate, true);
   v.setUint32(28, a.sampleRate * numCh * bps, true);
   v.setUint16(32, numCh * bps, true);
-  v.setUint16(34, bitDepth, true);
-  str(36, 'data');
-  v.setUint32(40, dataSize, true);
-  let o = 44;
-  const maxInt = Math.pow(2, bitDepth - 1) - 1;
-  const ditherAmp = dither && !isFloat ? 1 / maxInt : 0;
+  v.setUint16(34, bits, true);
+  let o = 36;
+  if (g711) {
+    v.setUint16(36, 0, true);
+    str(38, 'fact');
+    v.setUint32(42, 4, true);
+    v.setUint32(46, n, true);
+    o = 50;
+  }
+  str(o, 'data');
+  v.setUint32(o + 4, dataSize, true);
+  o += 8;
+  const maxInt = Math.pow(2, bits - 1) - 1;
+  const ditherAmp = dither && !isFloat && !g711 ? 1 / (maxInt + 1) : 0;
   for (let i = 0; i < n; i++) {
     for (let ch = 0; ch < numCh; ch++) {
       let s = a.channels[ch][i];
-      if (isFloat) {
-        v.setFloat32(o, s, true);
-      } else {
+      if (enc === 'ulaw') v.setUint8(o, linearToUlaw(s));
+      else if (enc === 'alaw') v.setUint8(o, linearToAlaw(s));
+      else if (isFloat) v.setFloat32(o, s, true);
+      else {
         if (ditherAmp) s += (Math.random() - Math.random()) * ditherAmp;
-        s = Math.max(-1, Math.min(1, s));
-        const q = Math.round(s < 0 ? s * (maxInt + 1) : s * maxInt);
-        if (bitDepth === 8) v.setUint8(o, q + 128);
-        else if (bitDepth === 16) v.setInt16(o, q, true);
+        const q = Math.max(-(maxInt + 1), Math.min(maxInt, Math.round(s * (maxInt + 1))));
+        if (bits === 8) v.setUint8(o, q + 128);
+        else if (bits === 16) v.setInt16(o, q, true);
         else {
           v.setUint8(o, q & 0xff);
           v.setUint8(o + 1, (q >> 8) & 0xff);
@@ -48,6 +66,8 @@ export function encodeWav(a: AudioData, bitDepth: WavBitDepth = 16, dither = tru
       o += bps;
     }
   }
+  o += pad;
+  new Uint8Array(buf).set(info, o);
   return buf;
 }
 
@@ -83,7 +103,9 @@ export function decodeWav(buf: ArrayBuffer): AudioData {
   for (let i = 0; i < n; i++) {
     for (let ch = 0; ch < numCh; ch++) {
       let s: number;
-      if (fmt === 3) s = bits === 64 ? v.getFloat64(p, true) : v.getFloat32(p, true);
+      if (fmt === 7) s = ulawToLinear(v.getUint8(p));
+      else if (fmt === 6) s = alawToLinear(v.getUint8(p));
+      else if (fmt === 3) s = bits === 64 ? v.getFloat64(p, true) : v.getFloat32(p, true);
       else if (bits === 8) s = (v.getUint8(p) - 128) / 128;
       else if (bits === 16) s = v.getInt16(p, true) / 32768;
       else if (bits === 24) {

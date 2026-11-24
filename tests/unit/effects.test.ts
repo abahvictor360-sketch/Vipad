@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EFFECTS, EFFECTS_BY_ID, defaultParams } from '../../src/audio/effects';
 import { stats, findSoundBounds, spectrum } from '../../src/audio/analysis';
 import { tone, noise } from '../../src/audio/generators';
-import { biquadCoeffs, biquadMagnitude, timeStretch, pitchShift } from '../../src/audio/dsp';
+import { biquadCoeffs, biquadMagnitude, timeStretch, pitchShift, applyBiquad } from '../../src/audio/dsp';
 import { length, AudioData } from '../../src/audio/buffer';
 
 const SR = 16000;
@@ -176,5 +176,45 @@ describe('noise-sample workflow', () => {
     expect(out[0]).toBe(0);
     expect(out[4]).toBeCloseTo(0.5);
     for (let i = 1; i < 5; i++) expect(out[i]).toBeGreaterThanOrEqual(out[i - 1]);
+  });
+});
+
+describe('pro effects', () => {
+  it('loudness normalize hits the LUFS target and respects the true-peak ceiling', async () => {
+    const { measureLoudness } = await import('../../src/audio/loudness');
+    const out = run('loudnorm', tone(48000, 2, 6, 1000, -30), { target: '-16', ceiling: -1 });
+    const l = measureLoudness(out);
+    expect(l.integrated).toBeGreaterThan(-16.5);
+    expect(l.integrated).toBeLessThan(-15.5);
+    const loud = run('loudnorm', tone(48000, 2, 4, 1000, -20), { target: '-14', ceiling: -1 });
+    expect(stats(loud).peakDb).toBeLessThan(-0.9);
+  });
+  it('remove silence shortens long pauses only', () => {
+    const a = tone(SR, 1, 4, 440, -6);
+    a.channels[0].fill(0, SR, SR * 3); // 2 s pause
+    const out = run('removeSilence', a, { minPause: 700, keep: 200 });
+    expect(length(out) / SR).toBeCloseTo(2.2, 1);
+    const short = tone(SR, 1, 2, 440, -6);
+    short.channels[0].fill(0, SR / 2, SR / 2 + SR * 0.3); // 300 ms pause is kept
+    expect(length(run('removeSilence', short))).toBe(length(short));
+  });
+  it('de-clipper restores flattened peaks above the clip level', () => {
+    const a = tone(SR, 1, 0.5, 100, 0);
+    const clipped = { sampleRate: SR, channels: [a.channels[0].map((v) => Math.max(-0.6, Math.min(0.6, v)))] };
+    const out = run('declip', clipped, { threshold: 99 });
+    let pk = 0;
+    for (const v of out.channels[0]) pk = Math.max(pk, Math.abs(v));
+    expect(pk).toBeGreaterThan(0.7);
+  });
+  it('de-esser reduces strong high-frequency content but keeps lows', () => {
+    const hiss = noise(SR, 1, 1, 'white', -6);
+    const low = tone(SR, 1, 1, 200, -6);
+    const mixd = { sampleRate: SR, channels: [hiss.channels[0].map((v, i) => v + low.channels[0][i])] };
+    const out = run('deess', mixd, { freq: 5000, threshold: -40, reduction: 18 });
+    const band = (x: AudioData, t: 'lowpass' | 'highpass', f: number) => ({ sampleRate: SR, channels: [applyBiquad(applyBiquad(x.channels[0], biquadCoeffs(t, SR, f)), biquadCoeffs(t, SR, f))] });
+    // the sibilant band drops a lot…
+    expect(stats(band(mixd, 'highpass', 6000)).rmsDb - stats(band(out, 'highpass', 6000)).rmsDb).toBeGreaterThan(10);
+    // …while the voice body below 1 kHz is unchanged
+    expect(Math.abs(stats(band(mixd, 'lowpass', 1000)).rmsDb - stats(band(out, 'lowpass', 1000)).rmsDb)).toBeLessThan(0.5);
   });
 });

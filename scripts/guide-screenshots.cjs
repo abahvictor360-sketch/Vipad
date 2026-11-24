@@ -115,6 +115,16 @@ async function select(page, a, b) {
   await page.keyboard.press('Escape');
   await page.keyboard.press('?');
   await shot(page, '10-shortcuts.jpg');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('file-input').setInputFiles({ name: 'Interview.wav', mimeType: 'audio/wav', buffer: wav(8, 'voice', 44100) });
+  await page.waitForTimeout(700);
+  await page.getByTestId('tab-view').click();
+  await page.getByTestId('rb-spectrogram').click();
+  await shot(page, '12-spectrogram.jpg');
+  await page.getByTestId('rb-spectrogram').click();
+  await page.getByTestId('tab-tools').click();
+  await page.getByTestId('rb-analysis').click();
+  await shot(page, '13-analysis.jpg');
   await ctx.close();
 
   const m = await browser.newContext({ ...devices['iPhone 13'] });

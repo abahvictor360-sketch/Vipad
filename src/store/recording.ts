@@ -16,7 +16,8 @@ import { formatTime } from '../app/format';
 export type RecordDest = 'auto' | 'new' | 'insert' | 'overdub' | 'track';
 
 interface RecordingState {
-  status: 'idle' | 'starting' | 'recording' | 'paused' | 'saving';
+  status: 'idle' | 'starting' | 'countdown' | 'recording' | 'paused' | 'saving';
+  countdown: number;
   dest: Exclude<RecordDest, 'auto'>;
   docId: string | null;
   at: number; // insert position (samples, doc rate) or multitrack cursor
@@ -46,6 +47,7 @@ export function describeMicError(e: unknown): string {
 
 export const useRecording = create<RecordingState>((set, get) => ({
   status: 'idle',
+  countdown: 0,
   dest: 'new',
   docId: null,
   at: 0,
@@ -115,9 +117,22 @@ export const useRecording = create<RecordingState>((set, get) => ({
       if (dest === 'overdub' && d && length(d.audio)) player.play(d.audio, at / d.audio.sampleRate);
     }
 
+    if (s.soundActivated) r.gateDb = s.soundThresholdDb;
     guard = new RecordingGuard(() => r.drain());
     void guard.start(nameFor(), r.sampleRate, s.recordChannels);
-    set({ status: 'recording', recorder: r, dest, docId, at, startedAt: Date.now() });
+    const secs = Math.max(0, Math.round(s.recordCountdown));
+    if (secs > 0) {
+      // count in: the mic is open (so the meter moves) but nothing is kept until zero
+      r.pause();
+      set({ status: 'countdown', countdown: secs, recorder: r, dest, docId, at, startedAt: Date.now() });
+      for (let k = secs; k > 0; k--) {
+        set({ countdown: k });
+        await new Promise((res) => setTimeout(res, 1000));
+        if (get().status !== 'countdown') return false; // cancelled during the count-in
+      }
+      r.resume();
+    }
+    set({ status: 'recording', countdown: 0, recorder: r, dest, docId, at, startedAt: Date.now() });
     return true;
   },
 
@@ -129,7 +144,7 @@ export const useRecording = create<RecordingState>((set, get) => ({
 
   stop: async () => {
     const { recorder: r, dest, docId, at, status } = get();
-    if (!r || (status !== 'recording' && status !== 'paused')) return;
+    if (!r || (status !== 'recording' && status !== 'paused' && status !== 'countdown')) return;
     set({ status: 'saving' });
     guard?.flush();
     const audio = await r.stop();
@@ -191,7 +206,7 @@ export const useRecording = create<RecordingState>((set, get) => ({
 
 export const isRecording = () => {
   const s = useRecording.getState().status;
-  return s === 'recording' || s === 'paused' || s === 'starting';
+  return s === 'recording' || s === 'paused' || s === 'starting' || s === 'countdown';
 };
 
 export type { AudioData };

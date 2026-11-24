@@ -11,6 +11,7 @@ import { ExportDialog } from '../components/dialogs/ExportDialog';
 import { RecordDialog } from '../components/dialogs/RecordDialog';
 import { NewDialog, ShortcutsDialog, LibraryDialog, BatchDialog, AboutDialog, ShortcutDialog } from '../components/dialogs/MiscDialogs';
 import { UpdateBanner } from '../components/UpdateBanner';
+import { AnalysisDialog } from '../components/dialogs/AnalysisDialog';
 import { startUpdateChecks } from './updates';
 import { runAction, listenForDesktopActions } from './actions';
 import { cycleFile, toggleFullscreen } from '../components/MainMenu';
@@ -43,6 +44,7 @@ function Dialogs() {
     case 'about': return <AboutDialog />;
     case 'settings': return <SettingsDialog />;
     case 'shortcut': return <ShortcutDialog />;
+    case 'analysis': return <AnalysisDialog />;
   }
 }
 
@@ -143,7 +145,7 @@ export function App() {
   const recStatus = useRecording((s) => s.status);
   const recDocId = useRecording((s) => s.docId);
   const recDest = useRecording((s) => s.dest);
-  const showLive = (recStatus === 'recording' || recStatus === 'paused' || recStatus === 'saving') && (recDest === 'track' ? multitrack : !multitrack && (recDocId === doc?.id || recDocId === null));
+  const showLive = (recStatus === 'recording' || recStatus === 'paused' || recStatus === 'saving' || recStatus === 'countdown') && (recDest === 'track' ? multitrack : !multitrack && (recDocId === doc?.id || recDocId === null));
   useEffect(() => { player.setVolume(useSettings.getState().masterVolume); }, []);
   const [dragOver, setDragOver] = useState(false);
   useShortcuts();

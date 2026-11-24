@@ -6,7 +6,7 @@ import { createSilence } from '../../audio/buffer';
 import { listLibrary, loadFromLibrary, deleteFromLibrary, LibraryItem } from '../../audio/library';
 import { formatTime, modKey } from '../../app/format';
 import { EFFECTS, EFFECTS_BY_ID, defaultParams } from '../../audio/effects';
-import { renderExport, ExportOptions, RateField, ChannelsField } from './ExportDialog';
+import { renderExport, ExportOptions, RateField, ChannelsField, FormatSelect, useFormats } from './ExportDialog';
 import { saveFile } from '../../app/platform';
 import { useSettings } from '../../store/settings';
 import { allDocs, deleteDoc, StoredDoc, putDoc, RETENTION_MS } from '../../audio/recovery';
@@ -202,6 +202,7 @@ export function BatchDialog() {
   const [files, setFiles] = useState<File[]>([]);
   const [effect, setEffect] = useState('normalize');
   const [fmt, setFmt] = useState<ExportOptions['format']>('mp3');
+  const formats = useFormats();
   const [channels, setChannels] = useState<ExportOptions['channels']>('keep');
   const [rate, setRate] = useState<ExportOptions['sampleRate']>('keep');
   const [progress, setProgress] = useState<string | null>(null);
@@ -214,7 +215,7 @@ export function BatchDialog() {
       try {
         let a = await decodeFile(f);
         if (effect !== 'none') a = EFFECTS_BY_ID[effect].apply(a, defaultParams(EFFECTS_BY_ID[effect]));
-        const { blob, ext } = renderExport(a, { format: fmt, bitDepth: 16, bitrate: 192, sampleRate: rate, channels });
+        const { blob, ext } = await renderExport(a, { format: fmt, bitDepth: 16, bitrate: 192, sampleRate: rate, channels });
         await saveFile(blob, `${f.name.replace(/\.[^.]+$/, '')}-vipad.${ext}`);
         ok++;
       } catch (e) {
@@ -254,13 +255,7 @@ export function BatchDialog() {
               {EFFECTS.filter((e) => !e.stereoOnly).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
           </label>
-          <label className="field">
-            <span className="field-label">Output format</span>
-            <select value={fmt} onChange={(e) => setFmt(e.target.value as ExportOptions['format'])}>
-              <option value="mp3">MP3 192 kbps</option>
-              <option value="wav">WAV 16-bit</option>
-            </select>
-          </label>
+          <FormatSelect value={fmt} onChange={setFmt} formats={formats} />
         </div>
         <div className="grid-2">
           <ChannelsField value={channels} onChange={setChannels} original={2} />

@@ -35,6 +35,10 @@ const { chromium } = require('playwright');
     if (!r.ok) throw new Error('createShortcut failed: ' + r.error);
     console.log('shortcut:', r.path);
   }
+  // platform encoders (Opus) must be available in the packaged app too
+  const enc = await win.evaluate(async () => ({ secure: isSecureContext, opus: (await window.AudioEncoder?.isConfigSupported({ codec: 'opus', sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 }))?.supported ?? false }));
+  console.log('encoders:', JSON.stringify(enc));
+  if (!enc.opus) throw new Error('Opus encoder unavailable in desktop app');
   if (process.argv[3]) await win.screenshot({ path: process.argv[3] });
   console.log(JSON.stringify({ ok: true, title: await win.title(), page: win.url().replace(/.*\//, '') }));
   await browser.close().catch(() => {});

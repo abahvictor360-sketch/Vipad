@@ -14,6 +14,7 @@ import { serializeProject, parseProject } from '../app/project';
 import { convertChannels } from '../audio/effects';
 import { checkForUpdates } from '../app/updates';
 import { createShortcut } from '../app/shortcut';
+import { pickAndInsertFile } from '../app/pickFile';
 
 export type Item = { label: string; shortcut?: string; onClick?: () => void; disabled?: boolean; sub?: Item[]; testId?: string } | 'sep';
 
@@ -77,6 +78,7 @@ export function useMenus(loadRecent: boolean): Record<string, Item[]> {
     File: [
       { label: 'New File…', shortcut: `${modKey}+N`, onClick: () => ed.setDialog({ type: 'new' }) },
       { label: 'Open File…', shortcut: `${modKey}+O`, onClick: () => document.querySelector<HTMLInputElement>('[data-testid=file-input]')?.click() },
+      { label: 'Insert File at Cursor…', onClick: pickAndInsertFile, disabled: !doc },
       {
         label: 'Open Recent',
         sub: recent.length
@@ -117,6 +119,15 @@ export function useMenus(loadRecent: boolean): Record<string, Item[]> {
       { label: 'Silence Selection', onClick: ed.silence, disabled: !hasSel },
       { label: 'Insert Silence…', onClick: () => ed.setDialog({ type: 'generate', kind: 'silence' }), disabled: !doc },
       'sep',
+      { label: `${settings.snapToZero ? '✓ ' : ''}Snap to Zero Crossings`, onClick: () => settings.set({ snapToZero: !settings.snapToZero }), testId: 'menu-snap' },
+      'sep',
+      { label: 'Split at Cursor', onClick: ed.splitAtCursor, disabled: !hasAudio, testId: 'menu-split-cursor' },
+      { label: 'Split at Markers', onClick: ed.splitAtMarkers, disabled: !doc?.markers.length, testId: 'menu-split-markers' },
+      { label: 'Split by Silence', onClick: () => ed.splitBySilence(), disabled: !hasAudio, testId: 'menu-split-silence' },
+      { label: 'Join All Open Files', onClick: ed.joinAll, disabled: docs.length < 2, testId: 'menu-join' },
+      { label: 'Extract Left Channel', onClick: () => ed.extractChannel(0), disabled: !doc || doc.audio.channels.length < 2 },
+      { label: 'Extract Right Channel', onClick: () => ed.extractChannel(1), disabled: !doc || doc.audio.channels.length < 2 },
+      'sep',
       { label: 'Select All', shortcut: `${modKey}+A`, onClick: ed.selectAll, disabled: !hasAudio },
       { label: 'Select None', shortcut: 'Esc', onClick: () => ed.setSelection(null), disabled: !hasSel },
       'sep',
@@ -125,6 +136,7 @@ export function useMenus(loadRecent: boolean): Record<string, Item[]> {
     ],
     Levels: [
       { label: 'Amplify…', onClick: fx('amplify'), disabled: !hasAudio },
+      { label: 'Loudness Normalize (LUFS)…', onClick: fx('loudnorm'), disabled: !hasAudio, testId: 'menu-loudnorm' },
       { label: 'Normalize…', onClick: fx('normalize'), disabled: !hasAudio },
       { label: 'Volume Ramp…', onClick: fx('envelope'), disabled: !hasAudio },
       { label: 'Fade In…', onClick: fx('fadeIn'), disabled: !hasAudio },
@@ -151,6 +163,9 @@ export function useMenus(loadRecent: boolean): Record<string, Item[]> {
       { label: 'Click/Pop Removal Auto…', onClick: fx('declick'), disabled: !hasAudio },
       { label: 'Click/Pop Removal Manual…', onClick: fx('interpolate'), disabled: !hasSel },
       { label: 'Hum Removal…', onClick: fx('notch'), disabled: !hasAudio },
+      { label: 'De-clipper…', onClick: fx('declip'), disabled: !hasAudio },
+      { label: 'De-esser…', onClick: fx('deess'), disabled: !hasAudio },
+      { label: 'Remove Silence (Shorten Pauses)…', onClick: fx('removeSilence'), disabled: !hasAudio },
       { label: 'Auto-Trim Silence…', onClick: fx('trimSilence'), disabled: !hasAudio },
     ],
     Control: [
@@ -185,12 +200,20 @@ export function useMenus(loadRecent: boolean): Record<string, Item[]> {
       { label: `${useSettings.getState().showSidePanel ? '✓ ' : ''}Effects / Info / Markers Panel`, onClick: () => document.querySelector<HTMLButtonElement>('[data-testid=toggle-panel]')?.click() },
       { label: multitrack ? '✓ Multitrack Mode' : 'Multitrack Mode', onClick: () => useSettings.getState().set({ multitrack: !multitrack }), testId: 'menu-multitrack' },
       'sep',
+      { label: `${doc?.view !== 'spectral' ? '✓ ' : ''}Waveform`, onClick: () => ed.setView('wave'), disabled: !doc, testId: 'menu-view-wave' },
+      { label: `${doc?.view === 'spectral' ? '✓ ' : ''}Spectrogram`, onClick: () => ed.setView('spectral'), disabled: !doc, testId: 'menu-view-spectral' },
+      'sep',
+      { label: 'Amplitude Zoom In', shortcut: 'Alt+Wheel', onClick: () => ed.setAmpZoom(ed.ampZoom * 2), disabled: !hasAudio },
+      { label: 'Amplitude Zoom Out', onClick: () => ed.setAmpZoom(ed.ampZoom / 2), disabled: !hasAudio },
+      { label: 'Reset Amplitude Zoom', onClick: () => ed.setAmpZoom(1), disabled: !hasAudio },
+      'sep',
       { label: 'Zoom In', shortcut: '+', onClick: () => zoom(0.5), disabled: !hasAudio },
       { label: 'Zoom Out', shortcut: '−', onClick: () => zoom(2), disabled: !hasAudio },
       { label: 'Zoom to Fit', shortcut: '0', onClick: () => zoom('fit'), disabled: !hasAudio },
     ],
     Tools: [
       { label: 'Settings…', shortcut: `${modKey}+,`, onClick: () => ed.setDialog({ type: 'settings' }), testId: 'menu-settings' },
+      { label: 'Frequency & Loudness Analysis…', onClick: () => ed.setDialog({ type: 'analysis' }), disabled: !hasAudio, testId: 'menu-analysis' },
       { label: 'Batch Processor…', onClick: () => ed.setDialog({ type: 'batch' }) },
       { label: 'Library…', onClick: () => ed.setDialog({ type: 'library' }) },
     ],

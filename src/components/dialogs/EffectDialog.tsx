@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Play, Square, RotateCcw, Wand2 } from 'lucide-react';
+import { Play, Square, RotateCcw, Wand2, Save, Trash2 } from 'lucide-react';
+import { BUILTIN_PRESETS, userPresets, saveUserPreset, deleteUserPreset } from '../../audio/presets';
 import { Modal } from './Modal';
 import { ParamControls } from './ParamControls';
 import { EFFECTS_BY_ID, defaultParams } from '../../audio/effects';
@@ -15,6 +16,9 @@ export function EffectDialog({ effectId }: { effectId: string }) {
   const doc = useEditor((s) => s.active());
   const [params, setParams] = useState(() => last ?? defaultParams(e));
   const [previewing, setPreviewing] = useState(false);
+  const [preset, setPreset] = useState('');
+  const [users, setUsers] = useState(() => userPresets(effectId));
+  const builtins = Object.keys(BUILTIN_PRESETS[effectId] ?? {});
   const close = () => {
     player.stop();
     useEditor.getState().setDialog(null);
@@ -75,6 +79,43 @@ export function EffectDialog({ effectId }: { effectId: string }) {
         </>
       }
     >
+      {e.params.length > 0 && (
+        <div className="preset-row">
+          <label className="field preset-field">
+            <span className="field-label">Preset</span>
+            <select
+              value={preset}
+              data-testid="preset-select"
+              onChange={(ev) => {
+                const v = ev.target.value;
+                setPreset(v);
+                if (v === '') setParams(defaultParams(e));
+                else if (v.startsWith('b:')) setParams({ ...defaultParams(e), ...BUILTIN_PRESETS[effectId][v.slice(2)] });
+                else if (v.startsWith('u:')) setParams({ ...defaultParams(e), ...users[v.slice(2)] });
+              }}
+            >
+              <option value="">Default settings</option>
+              {builtins.length > 0 && <optgroup label="Built-in">{builtins.map((n) => <option key={n} value={`b:${n}`}>{n}</option>)}</optgroup>}
+              {Object.keys(users).length > 0 && <optgroup label="My presets">{Object.keys(users).map((n) => <option key={n} value={`u:${n}`}>{n}</option>)}</optgroup>}
+            </select>
+          </label>
+          <button className="btn btn-ghost btn-sm" data-testid="preset-save" onClick={() => {
+            const name = prompt('Save these settings as a preset named:', preset.startsWith('u:') ? preset.slice(2) : '');
+            if (!name?.trim()) return;
+            saveUserPreset(effectId, name.trim(), params);
+            setUsers(userPresets(effectId));
+            setPreset(`u:${name.trim()}`);
+            useEditor.getState().toast(`Preset “${name.trim()}” saved`, 'success');
+          }}><Save size={14} /> Save preset</button>
+          {preset.startsWith('u:') && (
+            <button className="icon-btn" aria-label="Delete this preset" title="Delete preset" onClick={() => {
+              deleteUserPreset(effectId, preset.slice(2));
+              setUsers(userPresets(effectId));
+              setPreset('');
+            }}><Trash2 size={15} /></button>
+          )}
+        </div>
+      )}
       {e.params.length ? (
         <ParamControls defs={e.params} values={params} onChange={setParams} compact={effectId === 'eq'} />
       ) : (

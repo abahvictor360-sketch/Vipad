@@ -1,5 +1,6 @@
 import { AudioData, length, toMono, clone } from './buffer';
 import { linearFromDb, stats, findSoundBounds } from './analysis';
+import { measureLoudness, LOUDNESS_TARGETS } from './loudness';
 import {
   applyBiquad,
   biquadCoeffs,
@@ -122,6 +123,30 @@ export const EFFECTS: EffectDef[] = [
       const pk = stats(a).peak;
       const g = pk > 0 ? target / pk : 1;
       return mapChannels(a, (c) => c.map((v) => v * g));
+    },
+  },
+  {
+    id: 'loudnorm',
+    name: 'Loudness Normalize (LUFS)',
+    category: 'Volume',
+    description: 'Match a streaming / broadcast loudness standard, with a true-peak ceiling.',
+    params: [
+      { key: 'target', label: 'Target', type: 'select', default: '-14', options: LOUDNESS_TARGETS },
+      { key: 'ceiling', label: 'True-peak ceiling', type: 'number', min: -6, max: 0, step: 0.1, default: -1, unit: 'dBTP' },
+    ],
+    apply: (a, p) => {
+      const L = measureLoudness(a);
+      if (!Number.isFinite(L.integrated)) return mapChannels(a, (c) => new Float32Array(c));
+      const gain = linearFromDb(Number(p.target) - L.integrated);
+      let out = mapChannels(a, (c) => c.map((v) => v * gain));
+      const ceil = num(p, 'ceiling');
+      if (L.truePeak + 20 * Math.log10(gain) > ceil) {
+        // transparent look-ahead-free limiting only where peaks exceed the ceiling
+        out = dynamics(out, (db) => (db > ceil - 0.3 ? ceil - 0.3 - db : 0), 0.05, 60);
+        const lim = linearFromDb(ceil - 0.3);
+        out = mapChannels(out, (c) => c.map((v) => Math.max(-lim, Math.min(lim, v))));
+      }
+      return out;
     },
   },
   {
@@ -556,6 +581,199 @@ export const EFFECTS: EffectDef[] = [
           return s0 + (s1 - s0) * h;
         });
       }),
+  },
+  {
+    id: 'removeSilence',
+    name: 'Remove Silence (Shorten Pauses)',
+    category: 'Restoration',
+    description: 'Shorten every pause longer than a limit — tightens speech and podcasts.',
+    params: [
+      { key: 'threshold', label: 'Silence below', type: 'number', min: -80, max: -10, step: 1, default: -45, unit: 'dB' },
+      { key: 'minPause', label: 'Pauses longer than', type: 'number', min: 100, max: 5000, step: 50, default: 700, unit: 'ms' },
+      { key: 'keep', label: 'Shorten them to', type: 'number', min: 0, max: 2000, step: 10, default: 250, unit: 'ms' },
+    ],
+    apply: (a, p) => {
+      const sr = a.sampleRate;
+      const n = length(a);
+      const th = linearFromDb(num(p, 'threshold'));
+      const minLen = Math.round((num(p, 'minPause') / 1000) * sr);
+      const keep = Math.min(minLen, Math.round((num(p, 'keep') / 1000) * sr));
+      // envelope on 10 ms windows to find quiet runs
+      const win = Math.max(1, Math.round(sr * 0.01));
+      const quiet = new Uint8Array(Math.ceil(n / win));
+      for (let w = 0; w < quiet.length; w++) {
+        let pk = 0;
+        for (const c of a.channels) for (let i = w * win; i < Math.min(n, (w + 1) * win); i++) pk = Math.max(pk, Math.abs(c[i]));
+        quiet[w] = pk < th ? 1 : 0;
+      }
+      const cuts: [number, number][] = [];
+      for (let w = 0; w < quiet.length; ) {
+        if (!quiet[w]) { w++; continue; }
+        let e = w;
+        while (e < quiet.length && quiet[e]) e++;
+        const s0 = w * win, s1 = Math.min(n, e * win);
+        if (s1 - s0 > minLen) cuts.push([s0 + Math.floor(keep / 2), s1 - Math.ceil(keep / 2)]);
+        w = e;
+      }
+      if (!cuts.length) return mapChannels(a, (c) => new Float32Array(c));
+      const removed = cuts.reduce((s, [x, y]) => s + (y - x), 0);
+      const fade = Math.min(64, Math.floor(keep / 4));
+      return mapChannels(a, (c) => {
+        const out = new Float32Array(n - removed);
+        let o = 0, pos = 0;
+        for (const [x, y] of cuts) {
+          out.set(c.subarray(pos, x), o);
+          o += x - pos;
+          // tiny crossfade at the joint avoids clicks
+          for (let k = 0; k < fade && o - fade + k >= 0 && y + k < n; k++) {
+            const t = k / fade;
+            out[o - fade + k] = out[o - fade + k] * (1 - t) + c[y - fade + k] * t;
+          }
+          pos = y;
+        }
+        out.set(c.subarray(pos), o);
+        return out;
+      });
+    },
+  },
+  {
+    id: 'declip',
+    name: 'De-clipper',
+    category: 'Restoration',
+    description: 'Rebuild peaks that were flattened by recording too loud.',
+    params: [{ key: 'threshold', label: 'Clip level', type: 'number', min: 50, max: 100, step: 0.5, default: 98, unit: '%' }],
+    apply: (a, p) => {
+      const th = num(p, 'threshold') / 100;
+      return mapChannels(a, (c) => {
+        const o = new Float32Array(c);
+        let peak = 0;
+        for (const v of c) peak = Math.max(peak, Math.abs(v));
+        const lim = peak * th;
+        for (let i = 1; i < c.length - 1; i++) {
+          if (Math.abs(c[i]) < lim) continue;
+          let e = i;
+          while (e < c.length - 1 && Math.abs(c[e]) >= lim && Math.sign(c[e]) === Math.sign(c[i])) e++;
+          const s = i - 1;
+          if (e - s >= 3 && s >= 1 && e < c.length - 1) {
+            // cubic through the slopes on both sides of the flat run
+            const y0 = c[s], y1 = c[e], m0 = c[s] - c[s - 1], m1 = c[e + 1] - c[e];
+            const L = e - s;
+            for (let k = 1; k < L; k++) {
+              const t = k / L, t2 = t * t, t3 = t2 * t;
+              o[s + k] = (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * m0 * L + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * m1 * L;
+            }
+          }
+          i = e;
+        }
+        // keep the repaired peaks inside full scale
+        let pk = 0;
+        for (const v of o) pk = Math.max(pk, Math.abs(v));
+        return pk > 0.999 ? o.map((v) => (v * 0.999) / pk) : o;
+      });
+    },
+  },
+  {
+    id: 'deess',
+    name: 'De-esser',
+    category: 'Restoration',
+    description: 'Reduce harsh “s” and “sh” sounds in vocals.',
+    params: [
+      { key: 'freq', label: 'Sibilance above', type: 'number', min: 3000, max: 10000, step: 100, default: 5500, unit: 'Hz' },
+      { key: 'threshold', label: 'Threshold', type: 'number', min: -60, max: 0, step: 0.5, default: -28, unit: 'dB' },
+      { key: 'reduction', label: 'Max reduction', type: 'number', min: 0, max: 24, step: 0.5, default: 10, unit: 'dB' },
+    ],
+    apply: (a, p) => {
+      const sr = a.sampleRate;
+      const f = Math.min(num(p, 'freq'), sr * 0.45);
+      const th = num(p, 'threshold'), maxRed = num(p, 'reduction');
+      // Linkwitz-Riley 4th-order crossover: low + high sum to a flat (all-pass) response
+      const lr = (c: Float32Array, t: 'lowpass' | 'highpass') => applyBiquad(applyBiquad(c, biquadCoeffs(t, sr, f, Math.SQRT1_2)), biquadCoeffs(t, sr, f, Math.SQRT1_2));
+      const highs = a.channels.map((c) => lr(c, 'highpass'));
+      const lows = a.channels.map((c) => lr(c, 'lowpass'));
+      const atk = Math.exp(-1 / (0.001 * sr)), rel = Math.exp(-1 / (0.06 * sr));
+      let env = 0;
+      const n = length(a);
+      const out = a.channels.map(() => new Float32Array(n));
+      for (let i = 0; i < n; i++) {
+        let lvl = 0;
+        for (const h of highs) lvl = Math.max(lvl, Math.abs(h[i]));
+        env = lvl > env ? atk * env + (1 - atk) * lvl : rel * env + (1 - rel) * lvl;
+        const db = env > 1e-9 ? 20 * Math.log10(env) : -180;
+        const red = db > th ? Math.min(maxRed, (db - th) * 0.75) : 0;
+        const g = linearFromDb(-red);
+        // only the sibilant band is turned down; the body of the voice is untouched
+        for (let ch = 0; ch < out.length; ch++) out[ch][i] = lows[ch][i] + highs[ch][i] * g;
+      }
+      return { sampleRate: sr, channels: out };
+    },
+  },
+  {
+    id: 'flanger',
+    name: 'Flanger',
+    category: 'Special',
+    description: 'Jet-plane sweeping comb filter.',
+    params: [
+      { key: 'rate', label: 'Rate', type: 'number', min: 0.05, max: 5, step: 0.05, default: 0.3, unit: 'Hz' },
+      { key: 'depth', label: 'Depth', type: 'number', min: 0.1, max: 10, step: 0.1, default: 3, unit: 'ms' },
+      { key: 'feedback', label: 'Feedback', type: 'number', min: -0.95, max: 0.95, step: 0.01, default: 0.6 },
+      { key: 'mix', label: 'Mix', type: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
+    ],
+    apply: (a, p) => {
+      const sr = a.sampleRate, rate = num(p, 'rate'), depth = (num(p, 'depth') / 1000) * sr, fb = num(p, 'feedback'), mix = num(p, 'mix');
+      const size = Math.ceil(depth + 4);
+      return mapChannels(a, (c, ch) => {
+        const buf = new Float32Array(size + 2);
+        let w = 0;
+        const out = new Float32Array(c.length);
+        for (let i = 0; i < c.length; i++) {
+          const d = 1 + depth * (0.5 - 0.5 * Math.cos((2 * Math.PI * rate * i) / sr + ch * Math.PI * 0.5));
+          let r = w - d;
+          while (r < 0) r += buf.length;
+          const i0 = Math.floor(r), f = r - i0;
+          const del = buf[i0 % buf.length] * (1 - f) + buf[(i0 + 1) % buf.length] * f;
+          buf[w] = c[i] + del * fb;
+          w = (w + 1) % buf.length;
+          out[i] = c[i] * (1 - mix * 0.5) + del * mix;
+        }
+        return out;
+      });
+    },
+  },
+  {
+    id: 'phaser',
+    name: 'Phaser',
+    category: 'Special',
+    description: 'Swirling all-pass phase sweep.',
+    params: [
+      { key: 'rate', label: 'Rate', type: 'number', min: 0.05, max: 5, step: 0.05, default: 0.5, unit: 'Hz' },
+      { key: 'stages', label: 'Stages', type: 'number', min: 2, max: 12, step: 2, default: 6 },
+      { key: 'feedback', label: 'Feedback', type: 'number', min: 0, max: 0.9, step: 0.01, default: 0.5 },
+      { key: 'mix', label: 'Mix', type: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
+    ],
+    apply: (a, p) => {
+      const sr = a.sampleRate, rate = num(p, 'rate'), stages = Math.round(num(p, 'stages')), fb = num(p, 'feedback'), mix = num(p, 'mix');
+      const fMin = 200, fMax = Math.min(4000, sr * 0.4);
+      return mapChannels(a, (c, ch) => {
+        const z = new Float32Array(stages);
+        let last = 0;
+        const out = new Float32Array(c.length);
+        for (let i = 0; i < c.length; i++) {
+          const lfo = 0.5 - 0.5 * Math.cos((2 * Math.PI * rate * i) / sr + ch * Math.PI * 0.5);
+          const fc = fMin * Math.pow(fMax / fMin, lfo);
+          const t = Math.tan((Math.PI * fc) / sr);
+          const coef = (t - 1) / (t + 1);
+          let x = c[i] + last * fb;
+          for (let s = 0; s < stages; s++) {
+            const y = coef * x + z[s];
+            z[s] = x - coef * y;
+            x = y;
+          }
+          last = x;
+          out[i] = c[i] * (1 - mix * 0.5) + x * mix;
+        }
+        return out;
+      });
+    },
   },
   {
     id: 'dc',

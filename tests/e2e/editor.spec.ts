@@ -202,7 +202,9 @@ test.describe('export channels & sample rate', () => {
     const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-confirm').click()]);
     const b = readFileSync((await dl.path())!);
     expect(header(b)).toEqual({ channels: 2, rate: 10000, bits: 16 });
-    expect(b.length).toBe(44 + 10000 * 2 * 2);
+    // audio payload = 1 s × 10 kHz × 2 ch × 2 bytes (a LIST/INFO metadata chunk may follow it)
+    const dataAt = b.indexOf('data');
+    expect(b.readUInt32LE(dataAt + 4)).toBe(10000 * 2 * 2);
   });
 
   test('explains the 48 kHz MP3 limit and switches to WAV', async ({ page }) => {

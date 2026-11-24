@@ -94,7 +94,7 @@ export function Transport() {
   const vol = useSettings((s) => s.masterVolume);
   const [rate, setRate] = useState(1);
   const rec = useRecording();
-  const recording = rec.status === 'recording' || rec.status === 'paused' || rec.status === 'starting' || rec.status === 'saving';
+  const recording = rec.status === 'recording' || rec.status === 'paused' || rec.status === 'starting' || rec.status === 'saving' || rec.status === 'countdown';
   const [recSecs, setRecSecs] = useState(0);
   useEffect(() => {
     if (!recording) return;

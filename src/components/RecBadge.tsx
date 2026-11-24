@@ -6,7 +6,7 @@ import { formatTime } from '../app/format';
 /** Top-bar Record button that turns into a pulsing REC indicator with a live mic level while recording. */
 export function RecBadge() {
   const { status, start, stop } = useRecording();
-  const active = status === 'recording' || status === 'paused' || status === 'saving';
+  const active = status === 'recording' || status === 'paused' || status === 'saving' || status === 'countdown';
   const [t, setT] = useState(0);
   const [lvl, setLvl] = useState(0);
   useEffect(() => {

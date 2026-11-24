@@ -13,6 +13,7 @@ import { modKey } from '../app/format';
 import { MainMenu } from './MainMenu';
 import { AutosaveBadge } from './Chrome';
 import { useRecording } from '../store/recording';
+import { pickAndInsertFile } from '../app/pickFile';
 import { RecBadge } from './RecBadge';
 import { MenuBar } from './MenuBar';
 import { useSettings } from '../store/settings';
@@ -101,6 +102,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         items: [
           { label: 'Amplify', icon: <Volume2 size={18} />, onClick: fx('amplify'), disabled: !hasAudio },
           { label: 'Normalize', icon: <BarChart3 size={18} />, onClick: fx('normalize'), disabled: !hasAudio },
+          { label: 'Loudness', icon: <BarChart3 size={18} />, onClick: fx('loudnorm'), disabled: !hasAudio, title: 'Loudness Normalize (LUFS)', testId: 'fx-loudnorm' },
           { label: 'Ramp', icon: <TrendingUp size={18} />, onClick: fx('envelope'), disabled: !hasAudio, title: 'Volume ramp' },
           { label: 'Fade In', icon: <TrendingUp size={18} />, onClick: fx('fadeIn'), disabled: !hasAudio },
           { label: 'Fade Out', icon: <TrendingDown size={18} />, onClick: fx('fadeOut'), disabled: !hasAudio },
@@ -132,6 +134,9 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           { label: 'Click/Pop Manual', icon: <Eraser size={18} />, onClick: fx('interpolate'), disabled: !hasSel, title: 'Select a tiny region around the click first' },
           { label: 'Hum', icon: <Eraser size={18} />, onClick: fx('notch'), disabled: !hasAudio },
           { label: 'DC Offset', icon: <AudioLines size={18} />, onClick: fx('dc'), disabled: !hasAudio },
+          { label: 'De-clip', icon: <Activity size={18} />, onClick: fx('declip'), disabled: !hasAudio },
+          { label: 'De-ess', icon: <Wind size={18} />, onClick: fx('deess'), disabled: !hasAudio },
+          { label: 'Shorten Pauses', icon: <Scissors size={18} />, onClick: fx('removeSilence'), disabled: !hasAudio, title: 'Remove silence / shorten long pauses' },
         ],
       },
       {
@@ -179,6 +184,8 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           { label: 'Reverb', icon: <Waves size={18} />, onClick: fx('reverb'), disabled: !hasAudio },
           { label: 'Chorus', icon: <AudioLines size={18} />, onClick: fx('chorus'), disabled: !hasAudio },
           { label: 'Distortion', icon: <Activity size={18} />, onClick: fx('distortion'), disabled: !hasAudio },
+          { label: 'Flanger', icon: <Waves size={18} />, onClick: fx('flanger'), disabled: !hasAudio },
+          { label: 'Phaser', icon: <Waves size={18} />, onClick: fx('phaser'), disabled: !hasAudio },
         ],
       },
       {
@@ -213,6 +220,9 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       {
         title: 'Zoom',
         items: [
+          { label: doc?.view === 'spectral' ? 'Waveform' : 'Spectrogram', icon: doc?.view === 'spectral' ? <AudioLines size={18} /> : <BarChart3 size={18} />, onClick: () => st.setView(doc?.view === 'spectral' ? 'wave' : 'spectral'), disabled: !hasAudio, title: 'Switch between waveform and spectrogram (frequency) view', testId: 'rb-spectrogram' },
+          { label: 'Amp +', icon: <ZoomIn size={18} />, onClick: () => st.setAmpZoom(st.ampZoom * 2), disabled: !hasAudio, title: 'Vertical (amplitude) zoom in — Alt+wheel' },
+          { label: 'Amp −', icon: <ZoomOut size={18} />, onClick: () => st.setAmpZoom(st.ampZoom / 2), disabled: !hasAudio, title: 'Vertical zoom out' },
           { label: 'Zoom In', icon: <ZoomIn size={18} />, onClick: () => zoom(0.5), disabled: !hasAudio },
           { label: 'Zoom Out', icon: <ZoomOut size={18} />, onClick: () => zoom(2), disabled: !hasAudio },
           { label: 'Fit', icon: <Maximize2 size={18} />, onClick: () => zoom('fit'), disabled: !hasAudio },
@@ -235,9 +245,20 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     ],
     tools: [
       {
+        title: 'Split & join',
+        items: [
+          { label: 'Split Here', icon: <Split size={18} />, onClick: st.splitAtCursor, disabled: !hasAudio, title: 'Split the file at the cursor into two files', testId: 'rb-split-cursor' },
+          { label: 'At Markers', icon: <Flag size={18} />, onClick: st.splitAtMarkers, disabled: !doc?.markers.length, title: 'Split into one file per marked region' },
+          { label: 'By Silence', icon: <Scissors size={18} />, onClick: () => st.splitBySilence(), disabled: !hasAudio, title: 'Split wherever there is a pause', testId: 'rb-split-silence' },
+          { label: 'Join All', icon: <Merge size={18} />, onClick: st.joinAll, disabled: useEditor.getState().docs.length < 2, title: 'Join all open files into one', testId: 'rb-join' },
+          { label: 'Insert File', icon: <FilePlus2 size={18} />, onClick: pickAndInsertFile, disabled: !doc, title: 'Insert another audio file at the cursor' },
+        ],
+      },
+      {
         title: 'Tools',
         items: [
           { label: 'Settings', icon: <SlidersHorizontal size={18} />, onClick: () => st.setDialog({ type: 'settings' }), testId: 'rb-settings' },
+          { label: 'Analysis', icon: <BarChart3 size={18} />, onClick: () => st.setDialog({ type: 'analysis' }), disabled: !hasAudio, title: 'Frequency & loudness analysis', testId: 'rb-analysis' },
           { label: 'Batch', icon: <Layers size={18} />, onClick: () => st.setDialog({ type: 'batch' }) },
           { label: 'Library', icon: <Library size={18} />, onClick: () => st.setDialog({ type: 'library' }) },
           { label: 'Shortcuts', icon: <Keyboard size={18} />, onClick: () => st.setDialog({ type: 'shortcuts' }) },
@@ -288,7 +309,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <input
         ref={fileRef}
         type="file"
-        accept="audio/*,video/*,.wav,.mp3,.ogg,.oga,.flac,.m4a,.aac,.webm,.opus,.aif,.aiff,.caf,.mp4"
+        accept="audio/*,video/*,.wav,.mp3,.ogg,.oga,.flac,.m4a,.aac,.webm,.opus,.aif,.aiff,.aifc,.au,.snd,.caf,.mp4,.wma"
         multiple
         className="sr-only"
         data-testid="file-input"

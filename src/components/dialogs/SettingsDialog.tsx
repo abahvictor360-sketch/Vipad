@@ -95,6 +95,7 @@ export function SettingsDialog() {
           <Toggle k="confirmClose" label="Confirm before closing unsaved files" />
           <Toggle k="showSpectrum" label="Show spectrum analyser" />
           <Toggle k="showSidePanel" label="Show Effects / Info / Markers panel" />
+          <Toggle k="snapToZero" label="Snap selections to zero crossings" hint="Avoids clicks when cutting and pasting." />
           <Toggle k="showMenuBar" label="Show menu bar (File, Edit … Window, Help)" hint="On wide screens. The ☰ menu is always available." />
           <Toggle k="showRibbon" label="Show toolbar" />
           <Select k="skipSeconds" label="Arrow-key skip" options={[[0.1, '0.1 second'], [0.5, '0.5 second'], [1, '1 second'], [5, '5 seconds'], [10, '10 seconds']]} />
@@ -116,10 +117,13 @@ export function SettingsDialog() {
           <Toggle k="recordVoiceProcessing" label="Voice processing by default" hint="Echo cancellation, noise suppression and auto-gain. Best off for music." />
           <Toggle k="recordPlayAlong" label="Play other tracks while recording (multitrack)" hint="Hear existing tracks while you overdub. Use headphones to avoid bleed." />
           <Toggle k="autoSaveRecordings" label="Auto-save recordings to library" />
+          <Select k="recordCountdown" label="Countdown before recording" options={[[0, 'None'], [3, '3 seconds'], [5, '5 seconds'], [10, '10 seconds']]} />
+          <Toggle k="soundActivated" label="Sound-activated recording" hint="Only records while there is sound — silent stretches are skipped automatically." />
+          <Select k="soundThresholdDb" label="Sound-activated threshold" options={[[-55, '−55 dB (very sensitive)'], [-45, '−45 dB'], [-40, '−40 dB (default)'], [-35, '−35 dB'], [-30, '−30 dB (loud only)']]} />
         </section>
         <section>
           <h3>Export defaults</h3>
-          <Select k="exportFormat" label="Format" options={[['mp3', 'MP3'], ['wav', 'WAV']]} />
+          <Select k="exportFormat" label="Format" options={[['mp3', 'MP3'], ['wav', 'WAV'], ['flac', 'FLAC'], ['ogg', 'OGG (Opus)'], ['m4a', 'M4A (AAC)'], ['aiff', 'AIFF'], ['webm', 'WebM (Opus)'], ['au', 'AU'], ['raw', 'RAW PCM']]} />
           <Select k="mp3Bitrate" label="MP3 bitrate" options={[[96, '96 kbps'], [128, '128 kbps'], [192, '192 kbps'], [256, '256 kbps'], [320, '320 kbps']]} />
           <Select k="wavBitDepth" label="WAV bit depth" options={[[16, '16-bit'], [24, '24-bit'], [32, '32-bit float']]} />
           <Select k="exportChannels" label="Channels" options={[['keep', 'Same as original'], ['mono', 'Mono'], ['stereo', 'Stereo']]} />

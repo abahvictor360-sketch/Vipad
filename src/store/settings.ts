@@ -11,6 +11,10 @@ export interface Settings {
   masterVolume: number;
   showSidePanel: boolean;
   showMenuBar: boolean;
+  snapToZero: boolean;
+  recordCountdown: number;
+  soundActivated: boolean;
+  soundThresholdDb: number;
   showRibbon: boolean;
   notifyUpdates: boolean;
   lastSeenVersion: string;
@@ -20,7 +24,7 @@ export interface Settings {
   recordPlayAlong: boolean;
   autoSaveRecordings: boolean;
   // export
-  exportFormat: 'mp3' | 'wav';
+  exportFormat: 'mp3' | 'wav' | 'flac' | 'ogg' | 'm4a' | 'aiff' | 'webm' | 'au' | 'raw';
   mp3Bitrate: number;
   wavBitDepth: 8 | 16 | 24 | 32;
   exportChannels: 'keep' | 'mono' | 'stereo';
@@ -43,6 +47,10 @@ export const DEFAULT_SETTINGS: Settings = {
   masterVolume: 1,
   showSidePanel: true,
   showMenuBar: true,
+  snapToZero: false,
+  recordCountdown: 0,
+  soundActivated: false,
+  soundThresholdDb: -40,
   showRibbon: true,
   notifyUpdates: true,
   lastSeenVersion: '',

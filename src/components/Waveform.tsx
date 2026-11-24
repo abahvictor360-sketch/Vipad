@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Doc, useEditor } from '../store/editor';
-import { computePeaks } from '../audio/analysis';
+import { computePeaks, fft, hann } from '../audio/analysis';
 import { length } from '../audio/buffer';
 import { player } from '../audio/player';
 import { formatTime } from '../app/format';
@@ -37,6 +37,61 @@ function setupCanvas(c: HTMLCanvasElement, w: number, h: number) {
   return ctx;
 }
 
+const SPEC_FMIN = 40;
+const SPEC_COLORS = (() => {
+  // black → deep green → lime → yellow → white
+  const stops: [number, number, number, number][] = [[0, 0, 0, 0], [0.35, 10, 60, 20], [0.6, 120, 200, 30], [0.8, 198, 255, 61], [0.92, 255, 230, 80], [1, 255, 255, 255]];
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let k = 0;
+    while (k < stops.length - 2 && t > stops[k + 1][0]) k++;
+    const [t0, r0, g0, b0] = stops[k], [t1, r1, g1, b1] = stops[k + 1];
+    const f = (t - t0) / (t1 - t0 || 1);
+    lut[i * 3] = r0 + (r1 - r0) * f; lut[i * 3 + 1] = g0 + (g1 - g0) * f; lut[i * 3 + 2] = b0 + (b1 - b0) * f;
+  }
+  return lut;
+})();
+
+/** Log-frequency spectrogram of the visible range (one FFT per pixel column). */
+function renderSpectrogram(c: Float32Array, sr: number, scroll: number, spp: number, w: number, h: number): HTMLCanvasElement {
+  const N = sr > 64000 ? 4096 : 2048;
+  const win = hann(N);
+  const re = new Float32Array(N), im = new Float32Array(N);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  const nyq = sr / 2;
+  const rowBin = new Float32Array(h);
+  for (let y = 0; y < h; y++) rowBin[y] = ((SPEC_FMIN * Math.pow(nyq / SPEC_FMIN, 1 - (y + 0.5) / h)) / sr) * N;
+  const mags = new Float32Array(N / 2);
+  for (let x = 0; x < w; x++) {
+    const center = Math.round(scroll + (x + 0.5) * spp);
+    const start = center - N / 2;
+    for (let i = 0; i < N; i++) {
+      const s = start + i;
+      re[i] = s >= 0 && s < c.length ? c[s] * win[i] : 0;
+      im[i] = 0;
+    }
+    fft(re, im);
+    for (let b = 0; b < N / 2; b++) mags[b] = Math.hypot(re[b], im[b]) / (N / 4);
+    for (let y = 0; y < h; y++) {
+      const bf = rowBin[y], b0 = Math.min(N / 2 - 2, Math.floor(bf));
+      const m = mags[b0] + (mags[b0 + 1] - mags[b0]) * (bf - b0);
+      const db = m > 1e-9 ? 20 * Math.log10(m) : -120;
+      // 90 dB range with a power curve: quiet leakage stays dark, real content glows
+      const t = Math.max(0, Math.min(1, (db + 90) / 90));
+      const v = Math.round(Math.pow(t, 1.8) * 255);
+      const o = (y * w + x) * 4;
+      img.data[o] = SPEC_COLORS[v * 3]; img.data[o + 1] = SPEC_COLORS[v * 3 + 1]; img.data[o + 2] = SPEC_COLORS[v * 3 + 2]; img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
 function niceTick(secPerPx: number): number {
   const steps = [0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
   for (const s of steps) if (s / secPerPx >= 90) return s;
@@ -59,6 +114,8 @@ export function Waveform({ doc }: { doc: Doc }) {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const rulerRef = useRef<HTMLCanvasElement>(null);
   const peaksCache = useRef<{ key: string; peaks: Float32Array[] } | null>(null);
+  const specCache = useRef<{ key: string; images: HTMLCanvasElement[] } | null>(null);
+  const ampZoom = useEditor((s) => s.ampZoom);
   const { setSelection, setCursor, updateView } = useEditor.getState();
   const followPlayhead = useSettings((s) => s.followPlayhead);
 
@@ -142,8 +199,29 @@ export function Waveform({ doc }: { doc: Doc }) {
       }
     }
 
-    if (n > 0) {
-      const amp = (laneH / 2) * 0.92;
+    if (n > 0 && doc.view === 'spectral') {
+      const key = `${doc.id}:${doc.version}:${spp}:${scroll}:${width}:${Math.round(laneH)}`;
+      if (specCache.current?.key !== key) specCache.current = { key, images: chs.map((c) => renderSpectrogram(c, doc.audio.sampleRate, scroll, spp, Math.ceil(width), Math.max(1, Math.round(laneH)))) };
+      specCache.current.images.forEach((img, ch) => ctx.drawImage(img, 0, ch * laneH, width, laneH));
+      if (doc.selection) {
+        const x0 = Math.max(0, sampleToX(doc.selection.start)), x1 = Math.min(width, sampleToX(doc.selection.end));
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+        if (x1 > x0) ctx.fillRect(x0, 0, x1 - x0, height);
+      }
+      // frequency labels
+      ctx.font = '10px ui-monospace, Menlo, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      for (let ch = 0; ch < chs.length; ch++) {
+        for (const f of [100, 1000, 5000, 10000, 20000]) {
+          const nyq = doc.audio.sampleRate / 2;
+          if (f >= nyq) continue;
+          const y = ch * laneH + laneH * (1 - Math.log(f / SPEC_FMIN) / Math.log(nyq / SPEC_FMIN));
+          ctx.fillText(f >= 1000 ? `${f / 1000}k` : String(f), width - 30, y + 3);
+        }
+      }
+    } else if (n > 0) {
+      const amp = (laneH / 2) * 0.92 * ampZoom;
+      const clampY = (y: number, top: number) => Math.max(top, Math.min(top + laneH, y));
       if (spp >= 1) {
         const key = `${doc.id}:${doc.version}:${spp}:${scroll}:${width}`;
         if (peaksCache.current?.key !== key) {
@@ -171,8 +249,8 @@ export function Waveform({ doc }: { doc: Doc }) {
               if ((pass === 1) !== inSel) continue;
               const mn = p[x * 2];
               const mx = p[x * 2 + 1];
-              const y0 = mid - mx * amp;
-              const y1 = mid - mn * amp;
+              const y0 = clampY(mid - mx * amp, top);
+              const y1 = clampY(mid - mn * amp, top);
               ctx.fillRect(x, y0, 1, Math.max(1, y1 - y0));
             }
           }
@@ -189,7 +267,7 @@ export function Waveform({ doc }: { doc: Doc }) {
           ctx.beginPath();
           for (let i = s0; i < s1; i++) {
             const x = sampleToX(i);
-            const y = mid - c[i] * amp;
+            const y = clampY(mid - c[i] * amp, ch * laneH);
             if (i === s0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           }
@@ -204,6 +282,29 @@ export function Waveform({ doc }: { doc: Doc }) {
           }
         }
       }
+    }
+
+    // dB scale (amplitude ruler) at the right edge
+    if (n > 0 && doc.view !== 'spectral') {
+      ctx.font = '9px ui-monospace, Menlo, monospace';
+      ctx.textAlign = 'right';
+      for (let ch = 0; ch < chs.length; ch++) {
+        const mid = ch * laneH + laneH / 2;
+        const amp = (laneH / 2) * 0.92 * ampZoom;
+        let lastY = -100;
+        for (const db of [0, -3, -6, -12, -18, -24, -30, -36, -48]) {
+          const off = Math.pow(10, db / 20) * amp;
+          if (off > laneH / 2 - 4 || lastY - off < 14 && lastY > 0) continue;
+          lastY = off;
+          for (const y of [mid - off, mid + off]) {
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.fillRect(width - 26, Math.round(y), 26, 1);
+            ctx.fillStyle = '#6b6d66';
+            ctx.fillText(String(db), width - 2, y - 2);
+          }
+        }
+      }
+      ctx.textAlign = 'start';
     }
 
     // selection edges
@@ -232,7 +333,7 @@ export function Waveform({ doc }: { doc: Doc }) {
       ctx.fillStyle = '#111';
       ctx.fillText(m.label, x + 5, 11);
     }
-  }, [doc.audio, doc.version, doc.selection, doc.markers, doc.id, width, height, spp, scroll, n, sampleToX]);
+  }, [doc.audio, doc.version, doc.selection, doc.markers, doc.id, doc.view, width, height, spp, scroll, n, sampleToX, ampZoom]);
 
   // ---------- overlay: cursor + live playhead
   useEffect(() => {
@@ -365,6 +466,7 @@ export function Waveform({ doc }: { doc: Doc }) {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
+    if (d.moved && useSettings.getState().snapToZero) useEditor.getState().snapSelection();
     if (!d.moved) {
       const s = xToSample(localX(e));
       setSelection(null);
@@ -376,6 +478,11 @@ export function Waveform({ doc }: { doc: Doc }) {
   };
 
   const onWheel = (e: React.WheelEvent) => {
+    if (e.altKey) {
+      const st = useEditor.getState();
+      st.setAmpZoom(st.ampZoom * (e.deltaY < 0 ? 1.25 : 0.8));
+      return;
+    }
     if (e.ctrlKey || e.metaKey) {
       zoomAt(Math.exp(e.deltaY * 0.01), localX(e));
       return;

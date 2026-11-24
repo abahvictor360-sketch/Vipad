@@ -8,9 +8,11 @@ import { formatBytes, formatTime } from '../../app/format';
 import { saveFile } from '../../app/platform';
 import { useSettings } from '../../store/settings';
 import {
-  ExportOptions, renderExport, estimateSize, effectiveRate, effectiveChannels, isValidRate,
-  MIN_RATE, MAX_RATE, MP3_MAX_RATE, RATE_PRESETS,
+  ExportOptions, ExportFormat, renderExport, estimateSize, effectiveRate, effectiveChannels, effectiveDepth, effectiveBitrate, isValidRate,
+  MIN_RATE, MAX_RATE, RATE_PRESETS, FORMATS, FORMAT_ORDER, availableFormats,
 } from '../../audio/exporter';
+import { Tags } from '../../audio/codecs/tags';
+import { useEffect } from 'react';
 
 export type { ExportFormat, ExportOptions } from '../../audio/exporter';
 export { renderExport, estimateSize } from '../../audio/exporter';
@@ -42,7 +44,7 @@ export function RateField({ value, onChange, original, format }: { value: number
         {RATE_PRESETS.map((r) => (
           <option key={r} value={r}>
             {khz(r)}{r === 44100 ? ' — CD' : r === 48000 ? ' — video' : r === 96000 ? ' — hi-res' : r === 192000 ? ' — studio' : r === 225000 ? ' — maximum' : ''}
-            {format === 'mp3' && r > MP3_MAX_RATE ? ' (WAV only)' : ''}
+            {FORMATS[format].rates && !FORMATS[format].rates!.includes(r) ? ` (not for ${FORMATS[format].label})` : ''}
           </option>
         ))}
         <option value="custom">Custom…</option>
@@ -92,29 +94,120 @@ export function ChannelsField({ value, onChange, original }: { value: ExportOpti
     </div>
   );
 }
+/** Formats this device can write, detected once (platform encoders vary by OS/browser). */
+export function useFormats(): ExportFormat[] {
+  const [list, setList] = useState<ExportFormat[]>(FORMAT_ORDER.filter((f) => !FORMATS[f].platform));
+  useEffect(() => { void availableFormats().then(setList); }, []);
+  return list;
+}
+
+export function FormatSelect({ value, onChange, formats }: { value: ExportFormat; onChange: (f: ExportFormat) => void; formats: ExportFormat[] }) {
+  const groups = [...new Set(FORMAT_ORDER.map((f) => FORMATS[f].group))];
+  return (
+    <label className="field">
+      <span className="field-label">Format</span>
+      <select value={value} onChange={(e) => onChange(e.target.value as ExportFormat)} data-testid="export-format">
+        {groups.map((g) => (
+          <optgroup key={g} label={g}>
+            {FORMAT_ORDER.filter((f) => FORMATS[f].group === g && formats.includes(f)).map((f) => (
+              <option key={f} value={f}>{FORMATS[f].label} (.{FORMATS[f].ext})</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <small className="field-hint">{FORMATS[value].description}</small>
+    </label>
+  );
+}
+
+const DEPTH_LABEL: Record<number, string> = { 8: '8-bit', 16: '16-bit (CD quality)', 24: '24-bit (studio)', 32: '32-bit float' };
+
+function QualityField({ o, setO }: { o: ExportOptions; setO: (o: ExportOptions) => void }) {
+  const f = FORMATS[o.format];
+  if (f.bitrates) {
+    const b = effectiveBitrate(o);
+    return (
+      <label className="field">
+        <span className="field-label">Bitrate</span>
+        <select value={b} onChange={(e) => setO({ ...o, bitrate: Number(e.target.value) })} data-testid="export-bitrate">
+          {f.bitrates.map((x) => <option key={x} value={x}>{x} kbps{x === 192 && o.format === 'mp3' ? ' (recommended)' : x === 96 && o.format !== 'mp3' && o.format !== 'm4a' ? ' (great for voice)' : ''}</option>)}
+        </select>
+      </label>
+    );
+  }
+  const { bits, encoding } = effectiveDepth(o);
+  const value = encoding === 'pcm' ? String(bits) : encoding;
+  return (
+    <label className="field">
+      <span className="field-label">{o.format === 'raw' ? 'Sample format' : 'Bit depth'}</span>
+      <select
+        value={value}
+        data-testid="export-depth"
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === 'ulaw' || v === 'alaw') setO({ ...o, encoding: v });
+          else setO({ ...o, encoding: 'pcm', bitDepth: Number(v) as WavBitDepth });
+        }}
+      >
+        {f.bitDepths!.map((d) => <option key={d} value={d}>{o.format === 'raw' ? (d === 16 ? '16-bit signed, little-endian' : '32-bit float, little-endian') : DEPTH_LABEL[d]}</option>)}
+        {f.encodings?.includes('ulaw') && <option value="ulaw">8-bit µ-law (telephony)</option>}
+        {f.encodings?.includes('alaw') && <option value="alaw">8-bit A-law (telephony)</option>}
+      </select>
+    </label>
+  );
+}
+
+function TagFields({ tags, onChange }: { tags: Tags; onChange: (t: Tags) => void }) {
+  const field = (k: keyof Tags, label: string, ph = '') => (
+    <label className="field" key={k}>
+      <span className="field-label">{label}</span>
+      <input className="text-input" value={tags[k] ?? ''} placeholder={ph} onChange={(e) => onChange({ ...tags, [k]: e.target.value })} data-testid={`tag-${k}`} />
+    </label>
+  );
+  return (
+    <details className="tags-box">
+      <summary>Metadata — title, artist, album…</summary>
+      <div className="grid-2">
+        {field('title', 'Title')}
+        {field('artist', 'Artist')}
+        {field('album', 'Album')}
+        {field('year', 'Year', '2026')}
+        {field('genre', 'Genre', 'Podcast')}
+        {field('comment', 'Comment')}
+      </div>
+    </details>
+  );
+}
+
 export function ExportDialog() {
   const doc = useEditor((s) => s.active());
+  const formats = useFormats();
   const [name, setName] = useState(doc?.name ?? 'vipad-audio');
   const [onlySel, setOnlySel] = useState(false);
   const [o, setO] = useState<ExportOptions>(() => {
     const s = useSettings.getState();
-    return { format: s.exportFormat, bitDepth: s.wavBitDepth, bitrate: s.mp3Bitrate, sampleRate: s.exportSampleRate, channels: s.exportChannels };
+    return { format: s.exportFormat as ExportFormat, bitDepth: s.wavBitDepth, bitrate: s.mp3Bitrate, sampleRate: s.exportSampleRate, channels: s.exportChannels, encoding: 'pcm', tags: { title: doc?.name ?? '' } };
   });
   const close = () => useEditor.getState().setDialog(null);
+  useEffect(() => {
+    if (!formats.includes(o.format) && formats.length && !FORMATS[o.format].platform) return;
+    if (!formats.includes(o.format) && formats.length) setO((x) => ({ ...x, format: 'mp3' }));
+  }, [formats, o.format]);
   if (!doc) return null;
   const src = onlySel && doc.selection ? slice(doc.audio, doc.selection) : doc.audio;
+  const f = FORMATS[o.format];
   const outRate = effectiveRate(src.sampleRate, o);
   const outCh = effectiveChannels(src, o);
   const wantedRate = o.sampleRate === 'keep' ? src.sampleRate : o.sampleRate;
-  const mp3Capped = o.format === 'mp3' && wantedRate !== outRate;
+  const rateLimited = !!f.rates && wantedRate !== outRate;
 
   const doExport = async () => {
     const st = useEditor.getState();
     close();
-    useEditor.setState({ busy: `Encoding ${outCh === 1 ? 'mono' : 'stereo'} ${o.format.toUpperCase()} at ${khz(outRate)}…` });
+    useEditor.setState({ busy: `Encoding ${f.label} · ${outCh === 1 ? 'mono' : 'stereo'} · ${khz(outRate)}…` });
     await new Promise((r) => setTimeout(r, 30));
     try {
-      const { blob, ext } = renderExport(src, o);
+      const { blob, ext } = await renderExport(src, o, (p) => useEditor.setState({ busy: `Encoding ${f.label}… ${Math.round(p * 100)}%` }));
       const file = `${(name || 'vipad-audio').replace(/[\\/:*?"<>|]/g, '_')}.${ext}`;
       const how = await saveFile(blob, file);
       st.toast(`${how === 'downloaded' ? 'Exported' : 'Saved'} ${file} · ${outCh === 1 ? 'mono' : 'stereo'} · ${khz(outRate)}`, 'success');
@@ -128,66 +221,47 @@ export function ExportDialog() {
   return (
     <Modal
       title="Export audio"
-      subtitle={`${formatTime(length(src) / src.sampleRate)} · ${outCh === 1 ? 'Mono' : 'Stereo'} · ${khz(outRate)} · est. ${formatBytes(estimateSize(src, o))}`}
+      subtitle={`${formatTime(length(src) / src.sampleRate)} · ${f.label} · ${outCh === 1 ? 'Mono' : 'Stereo'} · ${khz(outRate)} · est. ${formatBytes(estimateSize(src, o))}`}
       onClose={close}
       icon={<Download size={18} />}
+      wide
       footer={
         <>
           <span className="spacer" />
           <button className="btn btn-ghost" onClick={close}>Cancel</button>
           <button className="btn btn-primary" onClick={doExport} data-testid="export-confirm" disabled={!length(src)}>
-            <Download size={16} /> Export
+            <Download size={16} /> Export {f.label}
           </button>
         </>
       }
     >
       <div className="params">
-        <label className="field">
-          <span className="field-label">File name</span>
-          <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} data-testid="export-name" />
-        </label>
         <div className="grid-2">
-          <div className="field">
-            <span className="field-label">Format</span>
-            <div className="segmented" role="radiogroup" aria-label="Format">
-              {(['mp3', 'wav'] as const).map((f) => (
-                <button key={f} role="radio" aria-checked={o.format === f} className={o.format === f ? 'on' : ''} onClick={() => setO({ ...o, format: f })} data-testid={`fmt-${f}`}>
-                  {f.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          </div>
+          <label className="field">
+            <span className="field-label">File name</span>
+            <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} data-testid="export-name" />
+          </label>
+          <FormatSelect value={o.format} onChange={(format) => setO({ ...o, format })} formats={formats} />
+        </div>
+        <div className="quick-formats" role="radiogroup" aria-label="Quick format">
+          {(['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aiff'] as ExportFormat[]).filter((x) => formats.includes(x)).map((x) => (
+            <button key={x} role="radio" aria-checked={o.format === x} className={o.format === x ? 'on' : ''} onClick={() => setO({ ...o, format: x })} data-testid={`fmt-${x}`}>{FORMATS[x].label.split(' ')[0]}</button>
+          ))}
+        </div>
+        <div className="grid-3">
           <ChannelsField value={o.channels} onChange={(channels) => setO({ ...o, channels })} original={src.channels.length} />
-        </div>
-        <div className="grid-2">
           <RateField value={o.sampleRate} onChange={(sampleRate) => setO({ ...o, sampleRate })} original={src.sampleRate} format={o.format} />
-          {o.format === 'wav' ? (
-            <label className="field">
-              <span className="field-label">Bit depth</span>
-              <select value={o.bitDepth} onChange={(e) => setO({ ...o, bitDepth: Number(e.target.value) as WavBitDepth })}>
-                <option value={16}>16-bit PCM (CD quality)</option>
-                <option value={24}>24-bit PCM (studio)</option>
-                <option value={32}>32-bit float (lossless edit)</option>
-                <option value={8}>8-bit PCM</option>
-              </select>
-            </label>
-          ) : (
-            <label className="field">
-              <span className="field-label">Bitrate</span>
-              <select value={o.bitrate} onChange={(e) => setO({ ...o, bitrate: Number(e.target.value) })}>
-                {[64, 96, 128, 160, 192, 256, 320].map((b) => (
-                  <option key={b} value={b}>{b} kbps{b === 192 ? ' (recommended)' : b === 320 ? ' (best)' : ''}</option>
-                ))}
-              </select>
-            </label>
-          )}
+          <QualityField o={o} setO={setO} />
         </div>
-        {mp3Capped && (
+        {rateLimited && (
           <div className="note" role="status" data-testid="mp3-rate-note">
             <AlertTriangle size={16} />
-            <span>MP3 supports at most 48 kHz, so this file will be saved at {khz(outRate)}. Choose <button className="link-btn" onClick={() => setO({ ...o, format: 'wav' })}>WAV</button> to export at {khz(wantedRate)}.</span>
+            <span>
+              {f.label} {f.rates!.length === 1 ? `always uses ${khz(f.rates![0])}` : `supports at most ${khz(f.rates![f.rates!.length - 1])}`}, so this file will be saved at {khz(outRate)}. Choose <button className="link-btn" onClick={() => setO({ ...o, format: 'wav' })}>WAV</button> or <button className="link-btn" onClick={() => setO({ ...o, format: 'flac' })}>FLAC</button> to export at {khz(wantedRate)}.
+            </span>
           </div>
         )}
+        {f.tags ? <TagFields tags={o.tags ?? {}} onChange={(tags) => setO({ ...o, tags })} /> : <small className="field-hint">{f.label} files are saved without metadata tags.</small>}
         {doc.selection && (
           <label className="check">
             <input type="checkbox" checked={onlySel} onChange={(e) => setOnlySel(e.target.checked)} /> Export selection only
