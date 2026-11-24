@@ -35,6 +35,14 @@ export class Recorder {
   paused = false;
   peak = 0;
   numCh: number = 2;
+  /** Per-channel instantaneous input level (0..1) for meters. */
+  levels: number[] = [0, 0];
+  /** Live waveform: per channel, interleaved [min,max] per PEAK_BLOCK frames. */
+  livePeaks: Float32Array[] = [];
+  peakCount = 0;
+  static PEAK_BLOCK = 128;
+  private acc: { n: number; mn: number[]; mx: number[] } = { n: 0, mn: [], mx: [] };
+  deviceLabel = '';
 
   static async devices(): Promise<MediaDeviceInfo[]> {
     if (!navigator.mediaDevices?.enumerateDevices) return [];
@@ -74,15 +82,28 @@ export class Recorder {
     this.frames = 0;
     this.paused = false;
 
+    this.deviceLabel = this.stream.getAudioTracks()[0]?.label ?? '';
+    this.livePeaks = Array.from({ length: this.numCh }, () => new Float32Array(8192));
+    this.peakCount = 0;
+    this.acc = { n: 0, mn: Array(this.numCh).fill(1), mx: Array(this.numCh).fill(-1) };
+    this.levels = Array(this.numCh).fill(0);
+
     const onData = (chs: Float32Array[]) => {
       let pk = 0;
-      for (const c of chs) for (let i = 0; i < c.length; i++) pk = Math.max(pk, Math.abs(c[i]));
+      for (let ch = 0; ch < this.numCh; ch++) {
+        const c = chs[Math.min(ch, chs.length - 1)];
+        let l = 0;
+        for (let i = 0; i < c.length; i++) l = Math.max(l, Math.abs(c[i]));
+        this.levels[ch] = l;
+        pk = Math.max(pk, l);
+      }
       this.peak = Math.max(pk, this.peak * 0.9);
       if (this.paused) return;
       const frame: Float32Array[] = [];
       for (let ch = 0; ch < this.numCh; ch++) frame.push(chs[Math.min(ch, chs.length - 1)]);
       this.chunks.push(frame);
       this.frames += frame[0].length;
+      this.accumulatePeaks(frame);
     };
 
     try {
@@ -111,6 +132,37 @@ export class Recorder {
   }
 
   private drained = 0;
+
+  /** Incrementally build min/max peaks so the live waveform costs O(new audio) per frame. */
+  private accumulatePeaks(frame: Float32Array[]) {
+    const B = Recorder.PEAK_BLOCK;
+    const a = this.acc;
+    const len = frame[0].length;
+    for (let i = 0; i < len; i++) {
+      for (let ch = 0; ch < this.numCh; ch++) {
+        const v = frame[ch][i];
+        if (v < a.mn[ch]) a.mn[ch] = v;
+        if (v > a.mx[ch]) a.mx[ch] = v;
+      }
+      if (++a.n === B) {
+        if ((this.peakCount + 1) * 2 > this.livePeaks[0].length) {
+          this.livePeaks = this.livePeaks.map((p) => {
+            const g = new Float32Array(p.length * 2);
+            g.set(p);
+            return g;
+          });
+        }
+        for (let ch = 0; ch < this.numCh; ch++) {
+          this.livePeaks[ch][this.peakCount * 2] = a.mn[ch];
+          this.livePeaks[ch][this.peakCount * 2 + 1] = a.mx[ch];
+          a.mn[ch] = 1;
+          a.mx[ch] = -1;
+        }
+        this.peakCount++;
+        a.n = 0;
+      }
+    }
+  }
 
   /** Return audio captured since the previous drain (for crash-safe incremental saving). */
   drain(): Float32Array[] | null {

@@ -6,6 +6,10 @@ export interface Settings {
   newChannels: 1 | 2;
   multitrack: boolean;
   // recording
+  micDeviceId: string;
+  micLabel: string;
+  masterVolume: number;
+  showSidePanel: boolean;
   recordChannels: 1 | 2;
   recordVoiceProcessing: boolean;
   recordPlayAlong: boolean;
@@ -29,6 +33,10 @@ export const DEFAULT_SETTINGS: Settings = {
   newSampleRate: 48000,
   newChannels: 2,
   multitrack: false,
+  micDeviceId: '',
+  micLabel: '',
+  masterVolume: 1,
+  showSidePanel: true,
   recordChannels: 1,
   recordVoiceProcessing: false,
   recordPlayAlong: true,

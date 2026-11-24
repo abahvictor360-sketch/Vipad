@@ -2,6 +2,8 @@ import { X, CheckCircle2, AlertTriangle, Info, Mic, FolderOpen, AudioLines, Load
 import { useEditor } from '../store/editor';
 import { Logo } from './Logo';
 import { useSettings } from '../store/settings';
+import { useRecording } from '../store/recording';
+import { Plus } from 'lucide-react';
 import { useAutosave } from '../app/autosave';
 import { Cloud, CloudOff, RefreshCw } from 'lucide-react';
 
@@ -19,6 +21,7 @@ export function AutosaveBadge() {
 export function DocTabs() {
   const docs = useEditor((s) => s.docs);
   const activeId = useEditor((s) => s.activeId);
+  useRecording((s) => s.status);
   const st = useEditor.getState();
   if (!docs.length) return null;
   return (
@@ -40,6 +43,16 @@ export function DocTabs() {
           </button>
         </div>
       ))}
+      <button
+        className="doc-tab-add"
+        aria-label="New tab for a new recording"
+        title="New tab — starts a new recording"
+        data-testid="new-tab"
+        disabled={useRecording.getState().status !== 'idle'}
+        onClick={() => void useRecording.getState().start('new')}
+      >
+        <Plus size={16} />
+      </button>
     </div>
   );
 }
@@ -73,7 +86,7 @@ export function EmptyState({ onOpen }: { onOpen: () => void }) {
       <h1>Record, edit &amp; perfect your audio.</h1>
       <p>Drop audio files anywhere, or start a new recording. Everything stays on your device.</p>
       <div className="empty-actions">
-        <button className="big-action primary" onClick={() => st.setDialog({ type: 'record' })} data-testid="empty-record">
+        <button className="big-action primary" onClick={() => void useRecording.getState().start('new')} data-testid="empty-record">
           <Mic size={26} />
           <strong>Record</strong>
           <span>Capture from your microphone</span>

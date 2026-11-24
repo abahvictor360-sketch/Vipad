@@ -21,7 +21,7 @@ if (!isElectron() && !isNative() && 'serviceWorker' in navigator && import.meta.
 
 // expose store for automated end-to-end tests
 if (import.meta.env.DEV || new URLSearchParams(location.search).has('e2e')) {
-  Promise.all([import('../store/editor'), import('../store/multitrack'), import('../store/settings')]).then(([e, m, s]) => {
-    Object.assign(window as unknown as Record<string, unknown>, { __vipad: e.useEditor, __vipadMT: m.useMultitrack, __vipadSettings: s.useSettings });
+  Promise.all([import('../store/editor'), import('../store/multitrack'), import('../store/settings'), import('../store/recording')]).then(([e, m, s, r]) => {
+    Object.assign(window as unknown as Record<string, unknown>, { __vipad: e.useEditor, __vipadMT: m.useMultitrack, __vipadSettings: s.useSettings, __vipadRec: r.useRecording });
   });
 }

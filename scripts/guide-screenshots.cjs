@@ -61,8 +61,7 @@ async function select(page, a, b) {
   await shot(page, '01-home.jpg');
 
   await page.getByTestId('empty-record').click();
-  await page.getByTestId('rec-start').click();
-  await page.waitForTimeout(2600);
+  await page.waitForTimeout(4500);
   await shot(page, '02-record.jpg');
   await page.getByTestId('rec-stop').click();
   await page.waitForTimeout(400);

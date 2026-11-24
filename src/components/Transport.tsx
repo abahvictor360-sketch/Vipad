@@ -4,7 +4,8 @@ import { useEditor, Doc } from '../store/editor';
 import { player } from '../audio/player';
 import { length } from '../audio/buffer';
 import { formatTime, parseTime } from '../app/format';
-import { LevelMeters } from './Meters';
+import { DbMeter } from './LiveRecording';
+import { useRecording } from '../store/recording';
 import { useSettings } from '../store/settings';
 import { useMultitrack } from '../store/multitrack';
 import { sessionLength } from '../audio/mixer';
@@ -90,13 +91,21 @@ export function Transport() {
   const mt = useMultitrack();
   const doc = multitrack ? null : editorDoc;
   const { playing, seconds } = usePlayhead(doc, multitrack ? mt.cursor / mt.session.sampleRate : null);
-  const [vol, setVol] = useState(1);
+  const vol = useSettings((s) => s.masterVolume);
   const [rate, setRate] = useState(1);
+  const rec = useRecording();
+  const recording = rec.status === 'recording' || rec.status === 'paused' || rec.status === 'starting' || rec.status === 'saving';
+  const [recSecs, setRecSecs] = useState(0);
+  useEffect(() => {
+    if (!recording) return;
+    const id = setInterval(() => setRecSecs(useRecording.getState().recorder?.seconds ?? 0), 100);
+    return () => clearInterval(id);
+  }, [recording]);
   const st = useEditor.getState();
   const sr = multitrack ? mt.session.sampleRate : doc?.audio.sampleRate ?? 48000;
   const n = multitrack ? sessionLength(mt.session) : doc ? length(doc.audio) : 0;
   const sel = doc?.selection;
-  const disabled = !n;
+  const disabled = !n || recording;
   const toStart = () => {
     if (multitrack) { mt.setCursor(0); mt.setScroll(0); } else { st.setCursor(0); st.updateView({ scroll: 0 }); }
     if (player.playing) { player.stop(); st.togglePlay(); }
@@ -108,16 +117,22 @@ export function Transport() {
         <button className="icon-btn" title="Go to start (Home)" aria-label="Go to start" disabled={disabled} onClick={toStart}>
           <SkipBack size={18} />
         </button>
-        <button className="play-btn" title="Play / Pause (Space)" aria-label={playing ? 'Pause' : 'Play'} disabled={disabled} onClick={st.togglePlay} data-testid="play">
-          {playing ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
-        </button>
-        <button className="icon-btn" title="Stop" aria-label="Stop" disabled={disabled} onClick={st.stop}>
+        {recording ? (
+          <button className="play-btn rec-pause" title="Pause / resume recording (P)" aria-label={rec.status === 'paused' ? 'Resume recording' : 'Pause recording'} onClick={rec.togglePause} data-testid="tp-rec-pause">
+            {rec.status === 'paused' ? <Play size={22} fill="currentColor" /> : <Pause size={22} fill="currentColor" />}
+          </button>
+        ) : (
+          <button className="play-btn" title="Play / Pause (Space)" aria-label={playing ? 'Pause' : 'Play'} disabled={disabled} onClick={st.togglePlay} data-testid="play">
+            {playing ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
+          </button>
+        )}
+        <button className="icon-btn" title={recording ? 'Stop recording (Space)' : 'Stop'} aria-label={recording ? 'Stop recording' : 'Stop'} disabled={!recording && disabled} onClick={() => (recording ? void rec.stop() : st.stop())} data-testid="tp-stop">
           <Square size={16} fill="currentColor" />
         </button>
         <button className="icon-btn" title="Go to end (End)" aria-label="Go to end" disabled={disabled} onClick={() => (multitrack ? mt.setCursor(n) : st.setCursor(n))}>
           <SkipForward size={18} />
         </button>
-        <button className="rec-btn" title="Record (R)" aria-label="Record" onClick={() => st.setDialog({ type: 'record' })} data-testid="record">
+        <button className={`rec-btn ${recording ? 'live' : ''}`} title={recording ? 'Stop recording (R)' : 'Record (R)'} aria-label={recording ? 'Stop recording' : 'Record'} aria-pressed={recording} onClick={() => (recording ? void rec.stop() : void rec.start('auto'))} data-testid="record">
           <Circle size={14} fill="currentColor" />
         </button>
         <button className={`icon-btn toggle ${loop ? 'on' : ''}`} title="Loop (L)" aria-label="Loop playback" aria-pressed={loop} onClick={() => st.setLoop(!loop)}>
@@ -126,8 +141,8 @@ export function Transport() {
       </div>
 
       <div className="tp-group tp-clock">
-        <output className="clock" data-testid="clock" aria-live="off">{formatTime(seconds)}</output>
-        <span className="clock-sub">/ {formatTime(n / sr)}</span>
+        <output className={`clock ${recording ? 'rec' : ''}`} data-testid="clock" aria-live="off">{formatTime(recording ? recSecs : seconds)}</output>
+        <span className="clock-sub">{recording ? (rec.status === 'paused' ? 'paused' : 'recording') : `/ ${formatTime(n / sr)}`}</span>
       </div>
 
       <div className="tp-group tp-sel" hidden={multitrack}>
@@ -156,7 +171,7 @@ export function Transport() {
       <div className="tp-group tp-mix">
         <label className="mini-slider" title="Playback volume">
           <Volume2 size={16} aria-hidden />
-          <input type="range" min={0} max={1.5} step={0.01} value={vol} aria-label="Playback volume" onChange={(e) => { const v = Number(e.target.value); setVol(v); player.setVolume(v); }} />
+          <input type="range" min={0} max={1.5} step={0.01} value={vol} aria-label="Master volume" onChange={(e) => { const v = Number(e.target.value); useSettings.getState().set({ masterVolume: v }); player.setVolume(v); }} />
         </label>
         <label className="mini-select" title="Playback speed">
           <Gauge size={16} aria-hidden />
@@ -164,7 +179,7 @@ export function Transport() {
             {[0.5, 0.75, 1, 1.25, 1.5, 2].map((r) => <option key={r} value={r}>{r}×</option>)}
           </select>
         </label>
-        <LevelMeters />
+        <DbMeter />
       </div>
     </footer>
   );

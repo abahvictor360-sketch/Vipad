@@ -12,6 +12,8 @@ import { convertChannels } from '../audio/effects';
 import { modKey } from '../app/format';
 import { MainMenu } from './MainMenu';
 import { AutosaveBadge } from './Chrome';
+import { useRecording } from '../store/recording';
+import { RecBadge } from './RecBadge';
 import { useSettings } from '../store/settings';
 
 type Tab = 'home' | 'levels' | 'effects' | 'restore' | 'generate' | 'view' | 'tools';
@@ -198,7 +200,10 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       },
       {
         title: 'Record',
-        items: [{ label: 'Record', icon: <Circle size={18} />, onClick: () => st.setDialog({ type: 'record' }) }],
+        items: [
+          { label: 'Record', icon: <Circle size={18} />, onClick: () => void useRecording.getState().start('auto') },
+          { label: 'Options', icon: <SlidersHorizontal size={18} />, onClick: () => st.setDialog({ type: 'record' }), title: 'Record options: microphone, channels, destination' },
+        ],
       },
     ],
     view: [
@@ -262,13 +267,11 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             <span className="hide-sm">Multitrack</span>
             <input type="checkbox" role="switch" aria-label="Multitrack mode" checked={multitrack} onChange={(e) => useSettings.getState().set({ multitrack: e.target.checked })} data-testid="multitrack-toggle" />
           </label>
-          <button className="btn btn-rec btn-sm" onClick={() => st.setDialog({ type: 'record' })}>
-            <Circle size={12} fill="currentColor" /> <span className="hide-sm">Record</span>
-          </button>
+          <RecBadge />
           <button className="btn btn-primary btn-sm" disabled={!hasAudio} onClick={() => st.setDialog({ type: 'export' })}>
             <Download size={15} /> <span className="hide-sm">Export</span>
           </button>
-          <button className="icon-btn" aria-label="Toggle side panel" onClick={onToggleSidebar}>
+          <button className="icon-btn" aria-label="Show or hide the Effects, Info and Markers panel" title="Show / hide side panel" onClick={onToggleSidebar} data-testid="toggle-panel">
             <PanelRight size={18} />
           </button>
         </div>

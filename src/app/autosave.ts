@@ -40,7 +40,7 @@ async function track<T>(p: Promise<T>): Promise<T | undefined> {
     return undefined;
   } finally {
     inflight--;
-    if (inflight === 0 && useAutosave.getState().status !== 'error') setStatus('saved');
+    if (inflight === 0 && !docTimer && !sessionTimer && !pendingDocs.size && useAutosave.getState().status !== 'error') setStatus('saved');
   }
 }
 
@@ -123,8 +123,12 @@ export async function startAutosave(): Promise<void> {
   let prevIds = new Set(useEditor.getState().docs.map((d) => d.id));
   useEditor.subscribe((st) => {
     const ids = new Set(st.docs.map((d) => d.id));
+    let urgent = false;
     for (const d of st.docs) {
-      if (savedKey.get(d.id) !== fingerprint(d)) pendingDocs.add(d.id);
+      if (savedKey.get(d.id) !== fingerprint(d)) {
+        if (!savedKey.has(d.id)) urgent = true; // never saved yet: most at risk, write right away
+        pendingDocs.add(d.id);
+      }
     }
     for (const id of prevIds) {
       if (!ids.has(id)) {
@@ -134,7 +138,11 @@ export async function startAutosave(): Promise<void> {
       }
     }
     prevIds = ids;
-    if (pendingDocs.size && !docTimer) docTimer = setTimeout(writeDocs, DEBOUNCE);
+    if (pendingDocs.size) setStatus('saving'); // be honest: unsaved changes exist until the write completes
+    if (pendingDocs.size && urgent) {
+      if (docTimer) clearTimeout(docTimer);
+      docTimer = setTimeout(writeDocs, 0);
+    } else if (pendingDocs.size && !docTimer) docTimer = setTimeout(writeDocs, DEBOUNCE);
   });
 
   // watch multitrack session
@@ -143,6 +151,7 @@ export async function startAutosave(): Promise<void> {
     if (st.version === prevVersion) return;
     prevVersion = st.version;
     sessionDirty = true;
+    setStatus('saving');
     if (!sessionTimer) sessionTimer = setTimeout(writeSession, DEBOUNCE);
   });
 

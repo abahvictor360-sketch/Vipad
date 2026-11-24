@@ -3,6 +3,7 @@ import { Menu, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useEditor } from '../store/editor';
 import { useSettings } from '../store/settings';
 import { useMultitrack } from '../store/multitrack';
+import { useRecording } from '../store/recording';
 import { listLibrary, loadFromLibrary, LibraryItem } from '../audio/library';
 import { EFFECTS, EFFECT_CATEGORIES } from '../audio/effects';
 import { length } from '../audio/buffer';
@@ -151,7 +152,9 @@ export function MainMenu() {
     Control: [
       { label: 'Play / Pause', shortcut: 'Space', onClick: ed.togglePlay },
       { label: 'Stop', onClick: ed.stop },
-      { label: 'Record…', shortcut: 'R', onClick: () => ed.setDialog({ type: 'record' }) },
+      { label: 'Record', shortcut: 'R', onClick: () => void useRecording.getState().start('auto') },
+      { label: 'Record in New Tab', onClick: () => void useRecording.getState().start('new') },
+      { label: 'Record Options…', onClick: () => ed.setDialog({ type: 'record' }) },
       { label: loop ? '✓ Loop Playback' : 'Loop Playback', shortcut: 'L', onClick: () => ed.setLoop(!loop) },
       'sep',
       { label: 'Go to Start', shortcut: 'Home', onClick: () => ed.setCursor(0), disabled: !doc },
@@ -175,6 +178,7 @@ export function MainMenu() {
       { label: 'Trim to Region', onClick: ed.trim, disabled: !hasSel },
     ],
     View: [
+      { label: `${useSettings.getState().showSidePanel ? '✓ ' : ''}Effects / Info / Markers Panel`, onClick: () => document.querySelector<HTMLButtonElement>('[data-testid=toggle-panel]')?.click() },
       { label: multitrack ? '✓ Multitrack Mode' : 'Multitrack Mode', onClick: () => useSettings.getState().set({ multitrack: !multitrack }), testId: 'menu-multitrack' },
       'sep',
       { label: 'Zoom In', shortcut: '+', onClick: () => zoom(0.5), disabled: !hasAudio },

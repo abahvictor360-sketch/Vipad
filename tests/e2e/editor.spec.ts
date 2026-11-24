@@ -125,7 +125,7 @@ test.describe('editor', () => {
 
   test('records from the microphone (fake device), with pause/resume', async ({ page }) => {
     await page.getByTestId('empty-record').click();
-    await page.getByTestId('rec-start').click();
+    await expect(page.getByTestId('live-recording')).toBeVisible();
     await expect(page.getByTestId('rec-time')).toBeVisible();
     await page.waitForTimeout(1200);
     await page.getByTestId('rec-pause').click();

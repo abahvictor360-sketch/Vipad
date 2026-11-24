@@ -5,6 +5,7 @@ import {
 import { useMultitrack } from '../store/multitrack';
 import { useEditor, decodeFile } from '../store/editor';
 import { useSettings } from '../store/settings';
+import { useRecording } from '../store/recording';
 import { Track, Clip, sessionLength, clipEnd } from '../audio/mixer';
 import { computePeaks } from '../audio/analysis';
 import { length } from '../audio/buffer';
@@ -269,7 +270,7 @@ export function MultiTrack() {
     { label: 'Add Track', icon: <Plus size={17} />, onClick: () => mt.addTrack(), testId: 'mt-add-track' },
     { label: 'Add File as Track', icon: <FileAudio size={17} />, onClick: () => doc && mt.addTrack(doc.name, doc.audio, mt.cursor), disabled: !doc || !length(doc.audio), title: 'Add the file open in the editor as a new track at the cursor', testId: 'mt-add-doc' },
     { label: 'Import', icon: <Upload size={17} />, onClick: () => fileRef.current?.click(), testId: 'mt-import' },
-    { label: 'Record Track', icon: <Circle size={17} />, onClick: () => ed.setDialog({ type: 'record' }), testId: 'mt-record' },
+    { label: 'Record Track', icon: <Circle size={17} />, onClick: () => void useRecording.getState().start('track'), testId: 'mt-record' },
     { label: 'Undo', icon: <Undo2 size={17} />, onClick: mt.undo, disabled: !mt.undoStack.length },
     { label: 'Redo', icon: <Redo2 size={17} />, onClick: mt.redo, disabled: !mt.redoStack.length },
     { label: 'Split', icon: <Scissors size={17} />, onClick: () => { if (!mt.splitSelected()) ed.toast('Place the cursor inside a clip to split it'); }, title: 'Split clip at cursor (S)', testId: 'mt-split' },

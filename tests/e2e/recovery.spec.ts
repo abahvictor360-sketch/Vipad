@@ -27,7 +27,7 @@ test.describe('autosave & recovery', () => {
   test('a recording interrupted mid-take is recovered after the app closes', async ({ page }) => {
     await openApp(page);
     await page.getByTestId('empty-record').click();
-    await page.getByTestId('rec-start').click();
+    await expect(page.getByTestId('live-recording')).toBeVisible();
     await page.waitForTimeout(4500); // > two autosave flushes
     // simulate a crash: reload without pressing Stop
     await page.reload();

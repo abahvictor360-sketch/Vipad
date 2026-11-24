@@ -19,6 +19,8 @@ import { useSettings } from '../store/settings';
 import { useMultitrack } from '../store/multitrack';
 import { startAutosave, flushNow, hasPendingWrites } from './autosave';
 import { isElectron } from './platform';
+import { useRecording, isRecording } from '../store/recording';
+import { LiveRecording } from '../components/LiveRecording';
 
 let autosaveStarted = false;
 
@@ -49,6 +51,14 @@ function useShortcuts() {
       const k = e.key.toLowerCase();
       const run = (fn: () => void) => { e.preventDefault(); fn(); };
       if (mod && e.key === ',') return run(() => st.setDialog({ type: 'settings' }));
+      // while recording: Space / R stop, P pauses, Esc discards
+      if (isRecording()) {
+        const rec = useRecording.getState();
+        if (e.key === ' ' || k === 'r') return run(() => void rec.stop());
+        if (k === 'p') return run(rec.togglePause);
+        if (e.key === 'Escape') return run(() => void rec.cancel());
+        if (!mod) return;
+      }
       if (useSettings.getState().multitrack) {
         const mt = useMultitrack.getState();
         if (mod && k === 'z' && e.shiftKey) return run(mt.redo);
@@ -59,7 +69,7 @@ function useShortcuts() {
         if (e.key === ' ') return run(st.togglePlay);
         if (e.key === 'Delete' || e.key === 'Backspace') return run(() => mt.selectedClipId && mt.removeClip(mt.selectedClipId));
         if (k === 's') return run(() => void mt.splitSelected());
-        if (k === 'r') return run(() => st.setDialog({ type: 'record' }));
+        if (k === 'r') return run(() => (isRecording() ? void useRecording.getState().stop() : void useRecording.getState().start('track')));
         if (e.key === 'Home') return run(() => { mt.setCursor(0); mt.setScroll(0); });
         if (e.key === '+' || e.key === '=') return run(() => mt.setZoom(mt.pxPerSec * 1.6));
         if (e.key === '-') return run(() => mt.setZoom(mt.pxPerSec / 1.6));
@@ -101,7 +111,7 @@ function useShortcuts() {
         case ']': return run(() => st.jumpMarker(1));
         case '[': return run(() => st.jumpMarker(-1));
       }
-      if (k === 'r') return run(() => st.setDialog({ type: 'record' }));
+      if (k === 'r') return run(() => void useRecording.getState().start('auto'));
       if (k === 'l') return run(() => st.setLoop(!st.loop));
       if (k === 'm') return run(st.addMarker);
     };
@@ -113,7 +123,21 @@ function useShortcuts() {
 export function App() {
   const doc = useEditor((s) => s.active());
   const multitrack = useSettings((s) => s.multitrack);
-  const [sidebar, setSidebar] = useState(() => window.innerWidth > 1100);
+  const sidebarPref = useSettings((s) => s.showSidePanel);
+  const [sidebar, setSidebarState] = useState(() => sidebarPref && window.innerWidth > 1100);
+  const setSidebar = (v: boolean | ((p: boolean) => boolean)) => {
+    setSidebarState((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      useSettings.getState().set({ showSidePanel: next });
+      return next;
+    });
+  };
+  useEffect(() => { setSidebarState(sidebarPref && (window.innerWidth > 1100 || sidebar)); }, [sidebarPref]); // eslint-disable-line react-hooks/exhaustive-deps
+  const recStatus = useRecording((s) => s.status);
+  const recDocId = useRecording((s) => s.docId);
+  const recDest = useRecording((s) => s.dest);
+  const showLive = (recStatus === 'recording' || recStatus === 'paused' || recStatus === 'saving') && (recDest === 'track' ? multitrack : !multitrack && (recDocId === doc?.id || recDocId === null));
+  useEffect(() => { player.setVolume(useSettings.getState().masterVolume); }, []);
   const [dragOver, setDragOver] = useState(false);
   useShortcuts();
 
@@ -167,7 +191,9 @@ export function App() {
       {!multitrack && <DocTabs />}
       <div className="workspace">
         <main className="editor" aria-label="Editor">
-          {multitrack ? (
+          {showLive ? (
+            <LiveRecording />
+          ) : multitrack ? (
             <MultiTrack />
           ) : doc ? (
             length(doc.audio) > 0 ? (
@@ -180,7 +206,7 @@ export function App() {
                 <h2>“{doc.name}” is empty</h2>
                 <p>Record from your microphone, paste audio, or generate a tone to get started.</p>
                 <div className="empty-actions">
-                  <button className="btn btn-rec" onClick={() => useEditor.getState().setDialog({ type: 'record' })}>Record</button>
+                  <button className="btn btn-rec" onClick={() => void useRecording.getState().start('insert')} data-testid="empty-doc-record">Record</button>
                   <button className="btn btn-secondary" onClick={() => useEditor.getState().setDialog({ type: 'generate', kind: 'tone' })}>Generate</button>
                   <button className="btn btn-secondary" disabled={!useEditor.getState().clipboard} onClick={() => useEditor.getState().paste()}>Paste</button>
                 </div>

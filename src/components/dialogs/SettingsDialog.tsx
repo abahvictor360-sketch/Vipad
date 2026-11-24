@@ -2,6 +2,22 @@ import { Settings as SettingsIcon } from 'lucide-react';
 import { Modal } from './Modal';
 import { useEditor } from '../../store/editor';
 import { useSettings, Settings } from '../../store/settings';
+import { MicPicker } from './MicPicker';
+import { player } from '../../audio/player';
+
+function MasterVolume() {
+  const v = useSettings((s) => s.masterVolume);
+  return (
+    <div className="field">
+      <div className="field-row">
+        <label className="field-label" htmlFor="master-vol">Master volume</label>
+        <span className="field-num"><em>{Math.round(v * 100)} %</em></span>
+      </div>
+      <input id="master-vol" data-testid="master-volume" type="range" className="slider" min={0} max={1.5} step={0.01} value={v} style={{ ['--pct' as string]: `${(v / 1.5) * 100}%` }} onChange={(e) => { const n = Number(e.target.value); useSettings.getState().set({ masterVolume: n }); player.setVolume(n); }} />
+      <small className="field-hint">Playback level for everything you hear in Vipad (0–150 %). Doesn’t change your files.</small>
+    </div>
+  );
+}
 
 function Toggle({ label, hint, k }: { label: string; hint?: string; k: keyof Settings }) {
   const v = useSettings((s) => s[k]) as boolean;
@@ -58,6 +74,7 @@ export function SettingsDialog() {
           <Toggle k="followPlayhead" label="Follow playhead" hint="Scroll the view to keep the playhead visible while playing." />
           <Toggle k="confirmClose" label="Confirm before closing unsaved files" />
           <Toggle k="showSpectrum" label="Show spectrum analyser" />
+          <Toggle k="showSidePanel" label="Show Effects / Info / Markers panel" />
           <Select k="skipSeconds" label="Arrow-key skip" options={[[0.1, '0.1 second'], [0.5, '0.5 second'], [1, '1 second'], [5, '5 seconds'], [10, '10 seconds']]} />
           <Select k="undoSteps" label="Undo levels (new files)" options={[[25, '25'], [50, '50'], [100, '100'], [250, '250']]} />
         </section>
@@ -65,6 +82,11 @@ export function SettingsDialog() {
           <h3>New files</h3>
           <Select k="newSampleRate" label="Sample rate" options={[[22050, '22,050 Hz'], [44100, '44,100 Hz (CD)'], [48000, '48,000 Hz (video)'], [96000, '96,000 Hz (hi-res)']]} />
           <Select k="newChannels" label="Channels" options={[[1, 'Mono'], [2, 'Stereo']]} />
+        </section>
+        <section>
+          <h3>Audio devices</h3>
+          <MicPicker />
+          <MasterVolume />
         </section>
         <section>
           <h3>Recording</h3>

@@ -98,7 +98,7 @@ test.describe('multitrack', () => {
   test('records a new track with the fake microphone', async ({ page }) => {
     await page.getByTestId('multitrack-toggle').check();
     await page.getByTestId('mt-record').click();
-    await page.getByTestId('rec-start').click();
+    await expect(page.getByTestId('live-recording')).toBeVisible();
     await page.waitForTimeout(1200);
     await page.getByTestId('rec-stop').click();
     await expect.poll(async () => (await mtInfo(page)).tracks.length).toBe(1);
