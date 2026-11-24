@@ -45,6 +45,8 @@ export interface Settings {
   linkTurnUser: string;
   linkTurnPass: string;
   vbanPort: number;
+  /** Bumped when a default changes so saved settings can be migrated once. */
+  settingsVersion: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -64,7 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyUpdates: true,
   lastSeenVersion: '',
   dismissedUpdate: '',
-  recordChannels: 1,
+  recordChannels: 2,
   recordVoiceProcessing: false,
   recordPlayAlong: true,
   autoSaveRecordings: true,
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   linkTurnUser: '',
   linkTurnPass: '',
   vbanPort: 6980,
+  settingsVersion: 2,
 };
 
 const KEY = 'vipad.settings.v1';
@@ -94,7 +97,11 @@ const KEY = 'vipad.settings.v1';
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    const saved = JSON.parse(raw) as Partial<Settings>;
+    // v2: recordings default to stereo (earlier versions saved mono as the default)
+    if ((saved.settingsVersion ?? 1) < 2) saved.recordChannels = 2;
+    return { ...DEFAULT_SETTINGS, ...saved, settingsVersion: DEFAULT_SETTINGS.settingsVersion };
   } catch {
     return DEFAULT_SETTINGS;
   }

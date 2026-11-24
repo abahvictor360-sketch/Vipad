@@ -124,3 +124,25 @@ test.describe('settings: microphone, master volume, side panel', () => {
     await expect(page.locator('.sidebar')).toBeVisible();
   });
 });
+
+test('recordings are stereo by default, and older saved settings move to stereo once', async ({ page }) => {
+  // a user from an older version whose saved settings still say mono
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('seeded')) {
+      localStorage.setItem('vipad.settings.v1', JSON.stringify({ recordChannels: 1, multitrack: false }));
+      sessionStorage.setItem('seeded', '1');
+    }
+  });
+  await openApp(page);
+  expect(await page.evaluate(() => (window as any).__vipadSettings.getState().recordChannels)).toBe(2);
+  await page.getByTestId('record').click();
+  await page.waitForTimeout(1200);
+  await page.getByTestId('tp-stop').click();
+  await expect(page.getByTestId('waveform')).toBeVisible();
+  expect((await docInfo(page))!.channels).toBe(2);
+  // choosing mono afterwards sticks across reloads
+  await page.evaluate(() => (window as any).__vipadSettings.getState().set({ recordChannels: 1 }));
+  await page.reload();
+  await page.waitForFunction(() => (window as any).__vipadSettings);
+  expect(await page.evaluate(() => (window as any).__vipadSettings.getState().recordChannels)).toBe(1);
+});
