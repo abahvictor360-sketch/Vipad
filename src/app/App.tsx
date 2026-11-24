@@ -231,15 +231,7 @@ export function App() {
                 <Waveform doc={doc} />
               </>
             ) : (
-              <div className="empty empty-doc">
-                <h2>“{doc.name}” is empty</h2>
-                <p>Record from your microphone, paste audio, or generate a tone to get started.</p>
-                <div className="empty-actions">
-                  <button className="btn btn-rec" onClick={() => void useRecording.getState().start('insert')} data-testid="empty-doc-record">Record</button>
-                  <button className="btn btn-secondary" onClick={() => useEditor.getState().setDialog({ type: 'generate', kind: 'tone' })}>Generate</button>
-                  <button className="btn btn-secondary" disabled={!useEditor.getState().clipboard} onClick={() => useEditor.getState().paste()}>Paste</button>
-                </div>
-              </div>
+              <div className="empty-blank" data-testid="empty-doc" aria-label={`${doc.name} — empty. Press Record to start.`} />
             )
           ) : (
             <EmptyState onOpen={openPicker} />

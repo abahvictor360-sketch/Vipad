@@ -218,3 +218,9 @@ function linkInput(): MediaStream | null {
   const l = useLink.getState();
   return l.role === 'host' && l.recordLink ? l.mixStream() : null;
 }
+
+/** Open an empty "Recording N" tab, ready to record when the user presses Record. */
+export function newRecordingTab(): string {
+  const s = useSettings.getState();
+  return useEditor.getState().newDoc(`Recording ${seq++}`, createSilence(s.newSampleRate, s.recordChannels, 0), { dirty: false });
+}

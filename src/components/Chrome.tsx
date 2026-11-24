@@ -2,7 +2,7 @@ import { X, CheckCircle2, AlertTriangle, Info, Mic, FolderOpen, AudioLines, Load
 import { useEditor } from '../store/editor';
 import { Logo } from './Logo';
 import { useSettings } from '../store/settings';
-import { useRecording } from '../store/recording';
+import { useRecording, newRecordingTab } from '../store/recording';
 import { Plus } from 'lucide-react';
 import { useAutosave } from '../app/autosave';
 import { Cloud, CloudOff, RefreshCw } from 'lucide-react';
@@ -46,10 +46,10 @@ export function DocTabs() {
       <button
         className="doc-tab-add"
         aria-label="New tab for a new recording"
-        title="New tab — starts a new recording"
+        title="New tab — ready for a new recording"
         data-testid="new-tab"
         disabled={useRecording.getState().status !== 'idle'}
-        onClick={() => void useRecording.getState().start('new')}
+        onClick={() => newRecordingTab()}
       >
         <Plus size={16} />
       </button>

@@ -44,12 +44,21 @@ test.describe('live recording (in the editor)', () => {
     expect(await recStatus(page)).toBe('idle');
   });
 
-  test('the + tab opens a new tab and records a new take there', async ({ page }) => {
+  test('the + tab opens a new tab ready to record, and recording starts only when asked', async ({ page }) => {
     await generateTone(page, 1);
     const before = (await docInfo(page))!;
     await page.getByTestId('new-tab').click();
-    await expect(page.getByTestId('live-recording')).toBeVisible();
     await expect(page.locator('.doc-tab')).toHaveCount(2);
+    await expect(page.getByTestId('empty-doc')).toBeVisible();
+    await expect(page.getByTestId('empty-doc')).toHaveText('');
+    // nothing is recording yet
+    await page.waitForTimeout(600);
+    expect(await recStatus(page)).toBe('idle');
+    await expect(page.getByTestId('live-recording')).toHaveCount(0);
+    // the user starts it
+    await page.getByTestId('topbar-record').click();
+    await expect(page.getByTestId('live-recording')).toBeVisible();
+    await expect(page.locator('.doc-tab')).toHaveCount(2); // records into the new tab, no extra tab
     await page.waitForTimeout(1000);
     await page.getByTestId('rec-stop').click();
     const d = (await docInfo(page))!;
