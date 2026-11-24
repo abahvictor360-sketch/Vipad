@@ -294,7 +294,7 @@ export function Waveform({ doc }: { doc: Doc }) {
         let lastY = -100;
         for (const db of [0, -3, -6, -12, -18, -24, -30, -36, -48]) {
           const off = Math.pow(10, db / 20) * amp;
-          if (off > laneH / 2 - 4 || lastY - off < 14 && lastY > 0) continue;
+          if (off > laneH / 2 - 4 || off < 8 || (lastY > 0 && lastY - off < 14)) continue;
           lastY = off;
           for (const y of [mid - off, mid + off]) {
             ctx.fillStyle = 'rgba(255,255,255,0.08)';

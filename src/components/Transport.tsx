@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, Square, SkipBack, SkipForward, Repeat, Circle, ZoomIn, ZoomOut, Maximize2, Volume2, Gauge } from 'lucide-react';
 import { useEditor, Doc } from '../store/editor';
 import { player } from '../audio/player';
@@ -85,6 +85,15 @@ export function zoom(factor: number | 'fit' | 'selection') {
 }
 
 export function Transport() {
+  const footRef = useRef<HTMLElement>(null);
+  // keep toasts and banners just above the transport, however many rows it wraps to
+  useEffect(() => {
+    const el = footRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--transport-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const editorDoc = useEditor((s) => s.active());
   const loop = useEditor((s) => s.loop);
   const multitrack = useSettings((s) => s.multitrack);
@@ -112,7 +121,7 @@ export function Transport() {
   };
 
   return (
-    <footer className="transport" aria-label="Transport">
+    <footer ref={footRef} className="transport" aria-label="Transport">
       <div className="tp-group tp-buttons">
         <button className="icon-btn" title="Go to start (Home)" aria-label="Go to start" disabled={disabled} onClick={toStart}>
           <SkipBack size={18} />
