@@ -27,6 +27,14 @@ const { chromium } = require('playwright');
   await win.click('[data-testid=fx-normalize]');
   await win.click('[data-testid=effect-apply]');
   await win.waitForSelector('.toast-success');
+  // desktop bridge: preload is loaded and can create a desktop shortcut
+  const bridge = await win.evaluate(() => typeof window.vipadDesktop?.createShortcut === 'function');
+  if (!bridge) throw new Error('desktop bridge (preload) missing');
+  if (process.platform === 'linux') {
+    const r = await win.evaluate(() => window.vipadDesktop.createShortcut());
+    if (!r.ok) throw new Error('createShortcut failed: ' + r.error);
+    console.log('shortcut:', r.path);
+  }
   if (process.argv[3]) await win.screenshot({ path: process.argv[3] });
   console.log(JSON.stringify({ ok: true, title: await win.title(), page: win.url().replace(/.*\//, '') }));
   await browser.close().catch(() => {});

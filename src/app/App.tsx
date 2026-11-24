@@ -9,7 +9,11 @@ import { EffectDialog } from '../components/dialogs/EffectDialog';
 import { GenerateDialog } from '../components/dialogs/GenerateDialog';
 import { ExportDialog } from '../components/dialogs/ExportDialog';
 import { RecordDialog } from '../components/dialogs/RecordDialog';
-import { NewDialog, ShortcutsDialog, LibraryDialog, BatchDialog, AboutDialog } from '../components/dialogs/MiscDialogs';
+import { NewDialog, ShortcutsDialog, LibraryDialog, BatchDialog, AboutDialog, ShortcutDialog } from '../components/dialogs/MiscDialogs';
+import { UpdateBanner } from '../components/UpdateBanner';
+import { startUpdateChecks } from './updates';
+import { runAction, listenForDesktopActions } from './actions';
+import { cycleFile, toggleFullscreen } from '../components/MainMenu';
 import { length } from '../audio/buffer';
 import { player } from '../audio/player';
 import { Upload } from 'lucide-react';
@@ -38,6 +42,7 @@ function Dialogs() {
     case 'batch': return <BatchDialog />;
     case 'about': return <AboutDialog />;
     case 'settings': return <SettingsDialog />;
+    case 'shortcut': return <ShortcutDialog />;
   }
 }
 
@@ -51,6 +56,8 @@ function useShortcuts() {
       const k = e.key.toLowerCase();
       const run = (fn: () => void) => { e.preventDefault(); fn(); };
       if (mod && e.key === ',') return run(() => st.setDialog({ type: 'settings' }));
+      if (e.key === 'F11') return run(toggleFullscreen);
+      if (mod && e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) return run(() => cycleFile(e.key === 'ArrowRight' ? 1 : -1));
       // while recording: Space / R stop, P pauses, Esc discards
       if (isRecording()) {
         const rec = useRecording.getState();
@@ -141,11 +148,21 @@ export function App() {
   const [dragOver, setDragOver] = useState(false);
   useShortcuts();
 
-  // restore the previous session and keep everything autosaved
+  // restore the previous session and keep everything autosaved; then handle icon quick actions
   useEffect(() => {
     if (autosaveStarted) return;
     autosaveStarted = true;
-    void startAutosave();
+    void startAutosave().then(() => {
+      const params = new URLSearchParams(location.search);
+      const action = params.get('action');
+      if (action) {
+        params.delete('action');
+        history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : ''));
+        runAction(action);
+      }
+    });
+    listenForDesktopActions();
+    startUpdateChecks();
   }, []);
 
   // everything is autosaved; only hold the page if a write is still in flight
@@ -221,6 +238,7 @@ export function App() {
       </div>
       <Transport />
       <Dialogs />
+      <UpdateBanner />
       <Toasts />
       {dragOver && (
         <div className="drop-overlay" aria-hidden>

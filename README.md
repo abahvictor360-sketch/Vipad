@@ -20,6 +20,7 @@ Vipad is a fast, private audio recorder and editor that runs on **Windows, macOS
 | Generate | Tones (sine/square/saw/triangle), white/pink/brown noise, silence, DTMF |
 | Files | Open WAV (native 8/16/24/32-bit & float), MP3, OGG, FLAC, M4A/AAC, WebM, Opus. Export WAV 8/16/24/32f and MP3 64–320 kbps, as mono or stereo, at any sample rate from 10 kHz to 225 kHz (windowed-sinc anti-alias resampling; MP3 up to 48 kHz). Batch processor. |
 | Never lose work | Every open file, the multitrack session and recordings *while they record* (2-second chunks) are autosaved to IndexedDB with persistent storage; reopening after a crash/close restores everything, interrupted takes are rebuilt, closed files stay restorable for 30 days |
+| Updates & shortcuts | Installed apps check GitHub Releases at start-up and every 6 h and show an in-app banner + system notification; the web app offers “Update now” when its service worker has a new version. Desktop/Start-menu shortcuts (installer + in-app), Windows jump list, macOS dock menu, Linux launcher actions, PWA icon quick actions |
 | Platform | Effects run in a Web Worker, PWA offline cache + OS “Open with…”, Electron desktop app (mic-only permissions, external links sandboxed), Capacitor Android/iOS with native share/save |
 
 All DSP lives in `src/audio/` as pure, framework-free TypeScript and is unit tested.

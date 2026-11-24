@@ -1,7 +1,7 @@
 {
   "name": "vipad",
   "productName": "Vipad",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Vipad \u2014 professional audio recorder and editor for desktop, mobile and web.",
   "author": "Vipad",
   "license": "MIT",
@@ -123,7 +123,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Vipad",
+      "menuCategory": false,
+      "runAfterFinish": true
     },
     "mac": {
       "target": [
@@ -138,7 +142,8 @@
       "category": "public.app-category.music",
       "identity": null,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Vipad needs microphone access to record audio."
+        "NSMicrophoneUsageDescription": "Vipad needs microphone access to record audio.",
+        "LSApplicationCategoryType": "public.app-category.music"
       }
     },
     "linux": {
@@ -149,7 +154,14 @@
       "category": "Audio",
       "artifactName": "Vipad-linux-${arch}.${ext}",
       "maintainer": "Vipad <noreply@vipad.app>",
-      "synopsis": "Audio recorder and editor"
+      "synopsis": "Audio recorder and editor",
+      "executableName": "vipad",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "Vipad",
+          "Keywords": "audio;recorder;editor;wav;mp3;"
+        }
+      }
     },
     "publish": null
   }

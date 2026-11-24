@@ -84,6 +84,11 @@ const SHORTCUTS: [string, string][] = [
   [`${modKey}+,`, 'Settings'],
   ['S (multitrack)', 'Split clip at cursor'],
   [`${modKey}+D (multitrack)`, 'Duplicate clip'],
+  [`${modKey}+Alt+← / →`, 'Previous / next file'],
+  ['F11', 'Full screen'],
+  ['P (recording)', 'Pause / resume recording'],
+  ['Space / R (recording)', 'Stop recording'],
+  ['Esc (recording)', 'Discard recording'],
   ['?', 'Show shortcuts'],
 ];
 
@@ -273,6 +278,27 @@ export function AboutDialog() {
       <p>Vipad {__APP_VERSION__} — a fast, private audio recorder and editor. Everything runs on your device; your audio never leaves it.</p>
       <p className="muted">Formats: open WAV, MP3, OGG, FLAC, M4A/AAC, WebM, Opus (anything your system can decode). Export WAV (8/16/24/32-bit) and MP3 (64–320 kbps).</p>
       <p><a className="link" href="./" target="_blank" rel="noreferrer">Download Vipad for desktop &amp; mobile →</a></p>
+    </Modal>
+  );
+}
+
+export function ShortcutDialog() {
+  const ua = navigator.userAgent;
+  const ios = /iphone|ipad|ipod/i.test(ua) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1);
+  const android = /android/i.test(ua);
+  const safariMac = /Safari/.test(ua) && !/Chrome|Chromium|Edg/.test(ua) && !ios;
+  const steps = ios
+    ? ['Open Vipad in Safari.', 'Tap the Share button (square with an arrow).', 'Choose “Add to Home Screen”, then “Add”.']
+    : android
+      ? ['Tap the browser menu (⋮).', 'Choose “Install app” or “Add to Home screen”.', 'Vipad appears on your home screen — long-press it for quick actions.']
+      : safariMac
+        ? ['In Safari choose File → “Add to Dock”.', 'Vipad opens in its own window from the Dock.']
+        : ['In Chrome or Edge, click the install icon at the right of the address bar (or menu → “Install Vipad”).', 'Vipad gets its own window, a desktop / Start-menu shortcut and works offline.', 'Prefer a full desktop app? Download it from the download page.'];
+  return (
+    <Modal title="Create a shortcut" subtitle="Put Vipad on your desktop or home screen." onClose={close} icon={<Info size={18} />}
+      footer={<><span className="spacer" /><a className="btn btn-secondary" href="./download.html" target="_blank" rel="noreferrer">Download the app</a><button className="btn btn-primary" onClick={close}>Done</button></>}>
+      <ol className="steps-list">{steps.map((s) => <li key={s}>{s}</li>)}</ol>
+      <p className="muted">Tip: right-click (desktop) or long-press (phone) the Vipad icon for quick actions — New recording, Multitrack and Library.</p>
     </Modal>
   );
 }

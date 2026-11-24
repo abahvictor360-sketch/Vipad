@@ -10,6 +10,11 @@ export interface Settings {
   micLabel: string;
   masterVolume: number;
   showSidePanel: boolean;
+  showMenuBar: boolean;
+  showRibbon: boolean;
+  notifyUpdates: boolean;
+  lastSeenVersion: string;
+  dismissedUpdate: string;
   recordChannels: 1 | 2;
   recordVoiceProcessing: boolean;
   recordPlayAlong: boolean;
@@ -37,6 +42,11 @@ export const DEFAULT_SETTINGS: Settings = {
   micLabel: '',
   masterVolume: 1,
   showSidePanel: true,
+  showMenuBar: true,
+  showRibbon: true,
+  notifyUpdates: true,
+  lastSeenVersion: '',
+  dismissedUpdate: '',
   recordChannels: 1,
   recordVoiceProcessing: false,
   recordPlayAlong: true,

@@ -4,6 +4,26 @@ import { useEditor } from '../../store/editor';
 import { useSettings, Settings } from '../../store/settings';
 import { MicPicker } from './MicPicker';
 import { player } from '../../audio/player';
+import { checkForUpdates, CURRENT, useUpdates } from '../../app/updates';
+import { createShortcut } from '../../app/shortcut';
+
+function UpdatesSection() {
+  const checking = useUpdates((s) => s.checking);
+  return (
+    <section>
+      <h3>Updates &amp; shortcuts</h3>
+      <Toggle k="notifyUpdates" label="Notify me about new versions" hint="Shows a message (and a system notification on desktop) when an update is available." />
+      <div className="set-row">
+        <span className="muted">Installed: v{CURRENT}</span>
+        <button className="btn btn-secondary btn-sm" disabled={checking} onClick={() => void checkForUpdates(true)} data-testid="check-updates">{checking ? 'Checking…' : 'Check now'}</button>
+      </div>
+      <div className="set-row">
+        <span className="muted">Put Vipad on your desktop / home screen</span>
+        <button className="btn btn-secondary btn-sm" onClick={() => void createShortcut()} data-testid="create-shortcut">Create shortcut</button>
+      </div>
+    </section>
+  );
+}
 
 function MasterVolume() {
   const v = useSettings((s) => s.masterVolume);
@@ -75,6 +95,8 @@ export function SettingsDialog() {
           <Toggle k="confirmClose" label="Confirm before closing unsaved files" />
           <Toggle k="showSpectrum" label="Show spectrum analyser" />
           <Toggle k="showSidePanel" label="Show Effects / Info / Markers panel" />
+          <Toggle k="showMenuBar" label="Show menu bar (File, Edit … Window, Help)" hint="On wide screens. The ☰ menu is always available." />
+          <Toggle k="showRibbon" label="Show toolbar" />
           <Select k="skipSeconds" label="Arrow-key skip" options={[[0.1, '0.1 second'], [0.5, '0.5 second'], [1, '1 second'], [5, '5 seconds'], [10, '10 seconds']]} />
           <Select k="undoSteps" label="Undo levels (new files)" options={[[25, '25'], [50, '50'], [100, '100'], [250, '250']]} />
         </section>
@@ -103,6 +125,7 @@ export function SettingsDialog() {
           <Select k="exportChannels" label="Channels" options={[['keep', 'Same as original'], ['mono', 'Mono'], ['stereo', 'Stereo']]} />
           <Select k="exportSampleRate" label="Sample rate" options={[['keep', 'Same as original'], [22050, '22.05 kHz'], [44100, '44.1 kHz (CD)'], [48000, '48 kHz (video)'], [96000, '96 kHz (hi-res)'], [192000, '192 kHz (studio)'], [225000, '225 kHz (maximum)']]} />
         </section>
+        <UpdatesSection />
       </div>
     </Modal>
   );

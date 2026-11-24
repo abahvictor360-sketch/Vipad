@@ -14,6 +14,7 @@ import { MainMenu } from './MainMenu';
 import { AutosaveBadge } from './Chrome';
 import { useRecording } from '../store/recording';
 import { RecBadge } from './RecBadge';
+import { MenuBar } from './MenuBar';
 import { useSettings } from '../store/settings';
 
 type Tab = 'home' | 'levels' | 'effects' | 'restore' | 'generate' | 'view' | 'tools';
@@ -43,6 +44,8 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const clipboard = useEditor((s) => s.clipboard);
   const follow = useSettings((s) => s.followPlayhead);
   const multitrack = useSettings((s) => s.multitrack);
+  const showMenuBar = useSettings((s) => s.showMenuBar);
+  const showRibbon = useSettings((s) => s.showRibbon);
   const noiseProfile = useEditor((s) => s.noiseProfile);
   useEditor((s) => s.docs); // re-render when history changes
   const st = useEditor.getState();
@@ -248,6 +251,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 
   return (
     <header className="app-header">
+      {showMenuBar && <MenuBar />}
       <div className="topbar">
         <MainMenu />
         <a className="brand" href="./" title="Vipad home">
@@ -276,7 +280,7 @@ export function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </button>
         </div>
       </div>
-      {!multitrack && (
+      {!multitrack && showRibbon && (
         <div className="ribbon" role="toolbar" aria-label={`${tab} tools`}>
           {groups[tab].map((g) => <Group key={g.title} {...g} />)}
         </div>

@@ -212,7 +212,7 @@ export function DbMeter() {
         const x = toX(db, w);
         ctx.fillStyle = '#4a4c45';
         ctx.fillRect(Math.round(x), SCALE - 2, 1, 2);
-        if (db % 6 === 0 || db === MIN) {
+        if (db % 6 === 0) {
           ctx.fillStyle = '#8d8f86';
           ctx.fillText(String(db), Math.min(w - 6, Math.max(8, x)), 0);
         }

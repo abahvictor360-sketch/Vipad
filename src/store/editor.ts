@@ -48,6 +48,7 @@ export type DialogState =
   | { type: 'batch' }
   | { type: 'about' }
   | { type: 'settings' }
+  | { type: 'shortcut' }
   | null;
 
 const uid = () => Math.random().toString(36).slice(2, 10);

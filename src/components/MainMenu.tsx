@@ -12,8 +12,10 @@ import { zoom } from './Transport';
 import { saveFile } from '../app/platform';
 import { serializeProject, parseProject } from '../app/project';
 import { convertChannels } from '../audio/effects';
+import { checkForUpdates } from '../app/updates';
+import { createShortcut } from '../app/shortcut';
 
-type Item = { label: string; shortcut?: string; onClick?: () => void; disabled?: boolean; sub?: Item[]; testId?: string } | 'sep';
+export type Item = { label: string; shortcut?: string; onClick?: () => void; disabled?: boolean; sub?: Item[]; testId?: string } | 'sep';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -39,12 +41,27 @@ async function saveProject() {
   ed.toast('Project saved', 'success');
 }
 
-export function MainMenu() {
-  const [open, setOpen] = useState(false);
-  const [cat, setCat] = useState<string | null>('File');
+export function toggleFullscreen() {
+  if (document.fullscreenElement) void document.exitFullscreen?.();
+  else void document.documentElement.requestFullscreen?.().catch(() => undefined);
+}
+
+export function cycleFile(dir: 1 | -1) {
+  const ed = useEditor.getState();
+  if (ed.docs.length < 2) return;
+  const i = ed.docs.findIndex((d) => d.id === ed.activeId);
+  const next = ed.docs[(i + dir + ed.docs.length) % ed.docs.length];
+  useSettings.getState().set({ multitrack: false });
+  ed.setActive(next.id);
+}
+
+/** All menu definitions, shared by the ☰ menu and the desktop menu bar. */
+export function useMenus(loadRecent: boolean): Record<string, Item[]> {
   const [recent, setRecent] = useState<LibraryItem[]>([]);
-  const ref = useRef<HTMLDivElement>(null);
-  const projRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (loadRecent) listLibrary().then((l) => setRecent(l.slice(0, 8))).catch(() => setRecent([]));
+  }, [loadRecent]);
+  const settings = useSettings();
   const doc = useEditor((s) => s.active());
   const docs = useEditor((s) => s.docs);
   const clipboard = useEditor((s) => s.clipboard);
@@ -56,20 +73,7 @@ export function MainMenu() {
   const hasSel = !!doc?.selection;
   const fx = (id: string) => () => ed.setDialog({ type: 'effect', effectId: id });
 
-  useEffect(() => {
-    if (!open) return;
-    listLibrary().then((l) => setRecent(l.slice(0, 8))).catch(() => setRecent([]));
-    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    window.addEventListener('pointerdown', close);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [open]);
-
-  const menus: Record<string, Item[]> = {
+  return {
     File: [
       { label: 'New File…', shortcut: `${modKey}+N`, onClick: () => ed.setDialog({ type: 'new' }) },
       { label: 'Open File…', shortcut: `${modKey}+O`, onClick: () => document.querySelector<HTMLInputElement>('[data-testid=file-input]')?.click() },
@@ -93,7 +97,7 @@ export function MainMenu() {
       { label: 'Close All', onClick: () => ed.closeAll(), disabled: !docs.length },
       { label: 'Recently Closed (recover)…', onClick: () => ed.setDialog({ type: 'library' }) },
       'sep',
-      { label: 'Open Project…', onClick: () => projRef.current?.click(), testId: 'menu-open-project' },
+      { label: 'Open Project…', onClick: () => document.querySelector<HTMLInputElement>('[data-testid=project-input]')?.click(), testId: 'menu-open-project' },
       { label: 'Save Project…', onClick: () => void saveProject(), disabled: !docs.length && !useMultitrack.getState().session.tracks.length },
       'sep',
       { label: 'Export Audio…', shortcut: `${modKey}+E`, onClick: () => ed.setDialog({ type: 'export' }), disabled: !hasAudio },
@@ -190,14 +194,56 @@ export function MainMenu() {
       { label: 'Batch Processor…', onClick: () => ed.setDialog({ type: 'batch' }) },
       { label: 'Library…', onClick: () => ed.setDialog({ type: 'library' }) },
     ],
-    Window: docs.length ? docs.map((d) => ({ label: `${d.id === doc?.id ? '✓ ' : ''}${d.name}`, onClick: () => { useSettings.getState().set({ multitrack: false }); ed.setActive(d.id); } })) : [{ label: 'No open files', disabled: true }],
+    Window: [
+      { label: 'Next File', shortcut: `${modKey}+Alt+→`, onClick: () => cycleFile(1), disabled: docs.length < 2 },
+      { label: 'Previous File', shortcut: `${modKey}+Alt+←`, onClick: () => cycleFile(-1), disabled: docs.length < 2 },
+      'sep',
+      ...(docs.length
+        ? docs.map((d, i): Item => ({ label: `${d.id === doc?.id && !multitrack ? '✓ ' : ''}${i + 1}. ${d.name}${d.dirty ? ' •' : ''}`, onClick: () => { useSettings.getState().set({ multitrack: false }); ed.setActive(d.id); }, testId: `win-file-${i}` }))
+        : [{ label: 'No open files', disabled: true } as Item]),
+      'sep',
+      { label: 'Close File', shortcut: `${modKey}+W`, onClick: () => doc && ed.closeDoc(doc.id), disabled: !doc },
+      { label: 'Close All Files', onClick: () => ed.closeAll(), disabled: !docs.length },
+      'sep',
+      { label: `${!multitrack ? '✓ ' : ''}Waveform Editor`, onClick: () => useSettings.getState().set({ multitrack: false }), testId: 'win-editor' },
+      { label: `${multitrack ? '✓ ' : ''}Multitrack Mixer`, onClick: () => useSettings.getState().set({ multitrack: true }), testId: 'win-multitrack' },
+      'sep',
+      { label: `${settings.showMenuBar ? '✓ ' : ''}Menu Bar`, onClick: () => settings.set({ showMenuBar: !settings.showMenuBar }), testId: 'win-menubar' },
+      { label: `${settings.showRibbon ? '✓ ' : ''}Toolbar`, onClick: () => settings.set({ showRibbon: !settings.showRibbon }), testId: 'win-toolbar' },
+      { label: `${settings.showSidePanel ? '✓ ' : ''}Effects / Info / Markers Panel`, onClick: () => document.querySelector<HTMLButtonElement>('[data-testid=toggle-panel]')?.click(), testId: 'win-panel' },
+      { label: `${settings.showSpectrum ? '✓ ' : ''}Spectrum Analyser`, onClick: () => settings.set({ showSpectrum: !settings.showSpectrum }) },
+      'sep',
+      { label: 'Full Screen', shortcut: 'F11', onClick: toggleFullscreen },
+      { label: 'Reset Layout', onClick: () => settings.set({ showMenuBar: true, showRibbon: true, showSidePanel: true, showSpectrum: true }) },
+    ],
     Help: [
       { label: 'Keyboard Shortcuts', shortcut: '?', onClick: () => ed.setDialog({ type: 'shortcuts' }) },
-      { label: 'Download Desktop & Mobile Apps', onClick: () => window.open('./#download', '_blank') },
+      { label: 'User Guide', onClick: () => window.open('./guide.html', '_blank') },
+      { label: 'Check for Updates…', onClick: () => void checkForUpdates(true), testId: 'menu-check-updates' },
+      { label: 'Create Shortcut / Install App…', onClick: () => void createShortcut(), testId: 'menu-shortcut' },
+      { label: 'Download Desktop & Mobile Apps', onClick: () => window.open('./download.html', '_blank') },
       { label: 'Report a Problem', onClick: () => window.open('https://github.com/abahvictor360-sketch/Vipad/issues', '_blank') },
       { label: 'About Vipad', onClick: () => ed.setDialog({ type: 'about' }) },
     ],
   };
+}
+
+export function MainMenu() {
+  const [open, setOpen] = useState(false);
+  const [cat, setCat] = useState<string | null>('File');
+  const ref = useRef<HTMLDivElement>(null);
+  const menus = useMenus(open);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', esc);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [open]);
 
   const run = (it: Exclude<Item, 'sep'>) => {
     if (it.disabled || !it.onClick) return;
@@ -262,7 +308,7 @@ export function MainMenu() {
           )}
         </div>
       )}
-      <input ref={projRef} type="file" accept=".vipad,application/json" className="sr-only" data-testid="project-input" onChange={(e) => {
+      <input type="file" accept=".vipad,application/json" className="sr-only" data-testid="project-input" onChange={(e) => {
         const f = e.target.files?.[0];
         e.target.value = '';
         if (f) void openProject(f);
