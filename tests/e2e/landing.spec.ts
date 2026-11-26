@@ -9,6 +9,7 @@ test.describe('landing page', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Record, edit');
     for (const id of ['about', 'features', 'how', 'download', 'faq']) await expect(page.locator(`#${id}`)).toBeAttached();
     await expect(page.locator('#hero-download')).toHaveAttribute('href', /download\.html#/);
+    await expect(page.locator('.footer')).toContainText('Developed by Victor Abah');
     expect(errors).toEqual([]);
   });
 
@@ -17,6 +18,7 @@ test.describe('landing page', () => {
     await page.getByRole('link', { name: /Open in browser/ }).click();
     await expect(page).toHaveURL(/app\.html/);
     await expect(page.getByText('Record, edit & perfect your audio.')).toBeVisible();
+    await expect(page.getByTestId('empty-credit')).toHaveText('Developed by Victor Abah');
   });
 
   test('FAQ expands', async ({ page }) => {
