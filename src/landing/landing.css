@@ -166,6 +166,7 @@ body::before {
 .footer nav a { text-decoration: none; color: var(--text-2); font-size: 14px; }
 .footer nav a:hover { color: var(--lime); }
 .footer p { color: var(--muted); font-size: 13.5px; margin: 0; }
+.footer .credit { color: var(--text-2); font-weight: 600; }
 
 
 /* vipad link */

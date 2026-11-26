@@ -51,6 +51,8 @@ test.describe('live recording (in the editor)', () => {
     await expect(page.locator('.doc-tab')).toHaveCount(2);
     await expect(page.getByTestId('empty-doc')).toBeVisible();
     await expect(page.getByTestId('empty-doc')).toHaveText('');
+    // a big faded logo watermark fills the blank tab
+    await expect(page.getByTestId('empty-watermark')).toBeVisible();
     // nothing is recording yet
     await page.waitForTimeout(600);
     expect(await recStatus(page)).toBe('idle');
@@ -58,6 +60,7 @@ test.describe('live recording (in the editor)', () => {
     // the user starts it
     await page.getByTestId('topbar-record').click();
     await expect(page.getByTestId('live-recording')).toBeVisible();
+    await expect(page.getByTestId('empty-watermark')).toHaveCount(0); // the watermark goes once recording starts
     await expect(page.locator('.doc-tab')).toHaveCount(2); // records into the new tab, no extra tab
     await page.waitForTimeout(1000);
     await page.getByTestId('tp-stop').click();

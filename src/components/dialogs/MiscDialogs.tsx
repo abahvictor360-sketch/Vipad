@@ -271,6 +271,7 @@ export function AboutDialog() {
   return (
     <Modal title="About Vipad" onClose={close} icon={<Info size={18} />}>
       <p>Vipad {__APP_VERSION__} — a fast, private audio recorder and editor. Everything runs on your device; your audio never leaves it.</p>
+      <p data-testid="about-credit">Developed by <strong>Victor Abah</strong>.</p>
       <p className="muted">Formats: open WAV, MP3, OGG, FLAC, M4A/AAC, WebM, Opus (anything your system can decode). Export WAV (8/16/24/32-bit) and MP3 (64–320 kbps).</p>
       <p><a className="link" href="./" target="_blank" rel="noreferrer">Download Vipad for desktop &amp; mobile →</a></p>
     </Modal>

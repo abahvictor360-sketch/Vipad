@@ -103,6 +103,7 @@ export function EmptyState({ onOpen }: { onOpen: () => void }) {
         </button>
       </div>
       <button className="link-btn" onClick={() => st.setDialog({ type: 'library' })}>Open from library</button>
+      <p className="empty-credit" data-testid="empty-credit">Developed by <strong>Victor Abah</strong></p>
     </div>
   );
 }

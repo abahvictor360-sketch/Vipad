@@ -2,6 +2,8 @@
 
 Vipad is a fast, private audio recorder and editor that runs on **Windows, macOS, Linux, Android, iOS and the web** from one codebase.
 
+Developed by **Victor Abah**.
+
 - **Landing page:** `index.html` → download buttons for every platform
 - **Editor:** `app.html` (installable PWA, works offline)
 - **Downloads:** `download.html` — every platform, live version/size from the latest GitHub Release
@@ -64,3 +66,7 @@ Edit `src/landing/support-config.ts` to set the links — a payment method with 
 ## Deploying the website
 
 The repo is Vercel-ready (`vercel.json`): framework Vite, output `dist/`. `/` is the landing page and `/app` is the editor.
+
+## Credits
+
+Vipad is designed and developed by **Victor Abah**.

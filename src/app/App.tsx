@@ -5,6 +5,7 @@ import { Transport, zoom } from '../components/Transport';
 import { Sidebar } from '../components/Sidebar';
 import { Waveform, Overview } from '../components/Waveform';
 import { DocTabs, Toasts, EmptyState } from '../components/Chrome';
+import { Logo } from '../components/Logo';
 import { EffectDialog } from '../components/dialogs/EffectDialog';
 import { GenerateDialog } from '../components/dialogs/GenerateDialog';
 import { ExportDialog } from '../components/dialogs/ExportDialog';
@@ -231,7 +232,11 @@ export function App() {
                 <Waveform doc={doc} />
               </>
             ) : (
-              <div className="empty-blank" data-testid="empty-doc" aria-label={`${doc.name} — empty. Press Record to start.`} />
+              <div className="empty-blank" data-testid="empty-doc" aria-label={`${doc.name} — empty. Press Record to start.`}>
+                <div className="empty-watermark" data-testid="empty-watermark" aria-hidden>
+                  <Logo size={512} />
+                </div>
+              </div>
             )
           ) : (
             <EmptyState onOpen={openPicker} />
